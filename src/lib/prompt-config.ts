@@ -18,7 +18,7 @@ export const DEFAULT_PROMPT_CONFIG: PromptConfig = {
       id: "importantSender",
       labelZh: "重点发件人/邮件组",
       labelEn: "Important Sender or Group",
-      description: "Mail from or containing configured important senders, managers, executives, or watched mail groups.",
+      description: "Mail from or containing configured important senders, mail groups, or keywords.",
       priorityHint: "Usually P0 or P1 unless it is clearly a notice"
     },
     {
@@ -121,7 +121,7 @@ function renderImportantSenders(importantSenders: string[]): string {
     return "- No configured important senders or groups.";
   }
   return [
-    "If a mail sender, recipient group, subject, or body contains any of these values, prefer category `importantSender` unless a more urgent category is clearly better:",
+    "If a mail sender, recipient group, subject, or body contains any of these values, prefer category `importantSender` unless a more urgent category is clearly better. Treat keyword matches as tags inside `importantSender`, not as a separate category:",
     ...importantSenders.map((item) => `- ${item}`)
   ].join("\n");
 }

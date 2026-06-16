@@ -8,7 +8,7 @@ import { buildQueueState, classificationFor, ensureClassifications, normalizeCla
 import { buildSummaryMarkdown } from "./lib/summary";
 import { buildDashboardState, CATEGORY_ORDER, type DashboardState } from "./lib/dashboard-state";
 import { allowedCategoryIds, composeAnalysisPrompt, normalizePromptConfig, type PromptConfig } from "./lib/prompt-config";
-import { buildBatchDigestMarkdown, emptyMailStore, mergeDigestIntoStore, normalizeMailStore, pruneMailStore, type MailStore, type StoredMail } from "./lib/mail-store";
+import { buildBatchDigestMarkdown, emptyMailIndex, emptyMailStore, mergeDigestIntoIndex, mergeDigestIntoStore, normalizeMailIndex, normalizeMailStore, pruneMailIndex, pruneMailStore, removeStoredMailByIds, type MailIndex, type MailStore, type StoredMail } from "./lib/mail-store";
 
 type Locale = "zh-CN" | "en-US";
 
@@ -33,7 +33,9 @@ type DashboardLabels = {
     batchSize: string;
     autoAnalyze: string;
     maxClassification: string;
-    retentionDays: string;
+    storeRetentionDays: string;
+    indexRetentionDays: string;
+    analysisRetentionDays: string;
     importantSenders: string;
     save: string;
     recentHoursOption: string;
@@ -78,7 +80,9 @@ const LABELS: Record<Locale, DashboardLabels> = {
       batchSize: "每批分析数量",
       autoAnalyze: "允许自动分析",
       maxClassification: "自动分析最高密级",
-      retentionDays: "本地缓存保留天数",
+      storeRetentionDays: "原文缓存保留天数",
+      indexRetentionDays: "去重索引保留天数",
+      analysisRetentionDays: "分析摘要保留天数",
       importantSenders: "重点发件人/邮件组（用 ; 分隔）",
       save: "保存设置",
       recentHoursOption: "最近小时数",
@@ -170,7 +174,9 @@ const LABELS: Record<Locale, DashboardLabels> = {
       batchSize: "Batch Size",
       autoAnalyze: "Allow Auto Analysis",
       maxClassification: "Max Auto Classification",
-      retentionDays: "Local Retention Days",
+      storeRetentionDays: "Raw Cache Retention Days",
+      indexRetentionDays: "Index Retention Days",
+      analysisRetentionDays: "Summary Retention Days",
       importantSenders: "Important senders/groups (; separated)",
       save: "Save Settings",
       recentHoursOption: "Recent Hours",
@@ -299,9 +305,12 @@ class EmailAnalysisApp {
 
     await runProcess("cscript.exe", args);
     const digest = parseDigest(await fs.promises.readFile(this.getDigestPath(), "utf8"));
-    const merge = mergeDigestIntoStore(await this.readMailStore(), digest);
-    const prunedStore = pruneMailStore(merge.store, Number(config.mailRetentionDays || 30));
+    const currentIndex = pruneMailIndex(await this.readMailIndex(), Number(config.mailIndexRetentionDays || 7));
+    const merge = mergeDigestIntoStore(await this.readMailStore(), digest, currentIndex.items.map((item) => item.mailId));
+    const nextIndex = pruneMailIndex(mergeDigestIntoIndex(currentIndex, digest), Number(config.mailIndexRetentionDays || 7));
+    const prunedStore = pruneMailStore(merge.store, Number(config.mailStoreRetentionDays || 1));
     await this.writeMailStore(prunedStore);
+    await this.writeMailIndex(nextIndex);
     const classificationCache = ensureClassifications(prunedStore.items, await this.readClassificationCache());
     await this.writeClassificationCache(classificationCache);
     await this.refresh();
@@ -336,6 +345,8 @@ class EmailAnalysisApp {
     const config = await this.readConfig();
     await this.importDigestIfStoreMissing();
     const store = await this.readMailStore();
+    const index = pruneMailIndex(await this.readMailIndex(), Number(config.mailIndexRetentionDays || 7));
+    await this.writeMailIndex(index);
     if (!store.items.length) {
       throw new Error("No pulled mail exists. Run Pull Mail first.");
     }
@@ -402,10 +413,15 @@ class EmailAnalysisApp {
     const analysis = parseAnalysisJson(raw, allowedCategoryIds(promptConfig));
 
     const normalized = normalizeAnalysis(analysis, allowedCategoryIds(promptConfig));
-    const merged = mergeAnalysisResults(currentAnalysis, normalized, allowedCategoryIds(promptConfig));
+    const merged = pruneAnalysisResult(
+      mergeAnalysisResults(currentAnalysis, normalized, allowedCategoryIds(promptConfig)),
+      Number(config.analysisRetentionDays || 7),
+      allowedCategoryIds(promptConfig)
+    );
     const summaryLabels = buildCategoryLabels(getLabels(getLocaleFromConfig(config)), promptConfig, getLocaleFromConfig(config));
     await fs.promises.writeFile(this.getAnalysisPath(), `${JSON.stringify(merged, null, 2)}\n`, "utf8");
     await fs.promises.writeFile(this.getSummaryPath(), buildSummaryMarkdown(merged, summaryLabels), "utf8");
+    await this.writeMailStore(removeStoredMailByIds(await this.readMailStore(), batch.map((item) => item.mailId)));
     await this.refresh();
     await vscode.window.showInformationMessage(`Email analysis completed for ${batch.length} mail(s).`);
   }
@@ -449,6 +465,7 @@ class EmailAnalysisApp {
 
   public async clearLocalCache(): Promise<void> {
     await this.writeMailStore(emptyMailStore());
+    await this.writeMailIndex(emptyMailIndex());
     await this.writeClassificationCache(normalizeClassificationCache({}));
     await fs.promises.writeFile(this.getAnalysisPath(), `${JSON.stringify({ generatedAt: "", overview: { totalMails: 0, mustHandleToday: 0, risks: 0, waitingForMe: 0, notices: 0 }, items: [] }, null, 2)}\n`, "utf8");
     await this.refresh();
@@ -485,6 +502,10 @@ class EmailAnalysisApp {
 
   private getMailStorePath(): string {
     return path.join(this.getDataDir(), "mail-store.json");
+  }
+
+  private getMailIndexPath(): string {
+    return path.join(this.getDataDir(), "mail-index.json");
   }
 
   private getClassificationCachePath(): string {
@@ -563,8 +584,13 @@ class EmailAnalysisApp {
       return { generatedAt: "", overview: { totalMails: 0, mustHandleToday: 0, risks: 0, waitingForMe: 0, notices: 0 }, items: [] };
     }
     try {
+      const config = await this.readConfig();
       const promptConfig = await this.readPromptConfig();
-      return normalizeAnalysis(JSON.parse(await fs.promises.readFile(this.getAnalysisPath(), "utf8")), allowedCategoryIds(promptConfig));
+      return pruneAnalysisResult(
+        normalizeAnalysis(JSON.parse(await fs.promises.readFile(this.getAnalysisPath(), "utf8")), allowedCategoryIds(promptConfig)),
+        Number(config.analysisRetentionDays || 7),
+        allowedCategoryIds(promptConfig)
+      );
     } catch {
       return { generatedAt: "", overview: { totalMails: 0, mustHandleToday: 0, risks: 0, waitingForMe: 0, notices: 0 }, items: [] };
     }
@@ -583,6 +609,21 @@ class EmailAnalysisApp {
 
   private async writeMailStore(store: MailStore): Promise<void> {
     await fs.promises.writeFile(this.getMailStorePath(), `${JSON.stringify(store, null, 2)}\n`, "utf8");
+  }
+
+  private async readMailIndex(): Promise<MailIndex> {
+    if (!fs.existsSync(this.getMailIndexPath())) {
+      return emptyMailIndex();
+    }
+    try {
+      return normalizeMailIndex(JSON.parse(await fs.promises.readFile(this.getMailIndexPath(), "utf8")));
+    } catch {
+      return emptyMailIndex();
+    }
+  }
+
+  private async writeMailIndex(index: MailIndex): Promise<void> {
+    await fs.promises.writeFile(this.getMailIndexPath(), `${JSON.stringify(index, null, 2)}\n`, "utf8");
   }
 
   private async readClassificationCache(): Promise<ClassificationCache> {
@@ -637,6 +678,8 @@ class EmailAnalysisApp {
     const analysis = await this.readAnalysisResult();
     const ignoredIds = await this.readIgnoredIds();
     const store = await this.readMailStore();
+    const index = pruneMailIndex(await this.readMailIndex(), Number(config.mailIndexRetentionDays || 7));
+    await this.writeMailIndex(index);
     const classifications = ensureClassifications(store.items, await this.readClassificationCache());
     await this.writeClassificationCache(classifications);
     const queue = buildQueueState(
@@ -650,12 +693,14 @@ class EmailAnalysisApp {
     const state = buildDashboardState(config, digest, analysis, ignoredIds, allowedCategoryIds(promptConfig)) as DashboardState & {
       modelInfo?: Record<string, unknown>;
       store?: MailStore;
+      index?: MailIndex;
       queue?: ReturnType<typeof buildQueueState>;
       classifications?: ClassificationCache;
       promptConfig?: PromptConfig;
     };
     state.modelInfo = await this.readModelInfo();
     state.store = store;
+    state.index = index;
     state.queue = queue;
     state.classifications = classifications;
     state.promptConfig = promptConfig;
@@ -764,7 +809,9 @@ class EmailAnalysisApp {
       analysisBatchSize: positiveNumber(patch.analysisBatchSize, current.analysisBatchSize || 5),
       autoAnalyzeEnabled: patch.autoAnalyzeEnabled === true || patch.autoAnalyzeEnabled === "true",
       autoAnalyzeMaxClassificationLevel: positiveNumber(patch.autoAnalyzeMaxClassificationLevel, current.autoAnalyzeMaxClassificationLevel || 2),
-      mailRetentionDays: positiveNumber(patch.mailRetentionDays, current.mailRetentionDays || 30),
+      mailStoreRetentionDays: positiveNumber(patch.mailStoreRetentionDays, current.mailStoreRetentionDays || 1),
+      mailIndexRetentionDays: positiveNumber(patch.mailIndexRetentionDays, current.mailIndexRetentionDays || 7),
+      analysisRetentionDays: positiveNumber(patch.analysisRetentionDays, current.analysisRetentionDays || 7),
       importantSenders: parseFolders(patch.importantSenders, current.importantSenders || [])
     };
     await this.writeConfig(next);
@@ -778,6 +825,7 @@ class EmailAnalysisApp {
     const config = state.config as Record<string, unknown>;
     const extendedState = state as DashboardState & {
       store?: MailStore;
+      index?: MailIndex;
       queue?: ReturnType<typeof buildQueueState>;
       classifications?: ClassificationCache;
       promptConfig?: PromptConfig;
@@ -789,6 +837,7 @@ class EmailAnalysisApp {
     const categoryLabels = buildCategoryLabels(labels, promptConfig, locale);
     const rows = state.categories.map((entry) => renderCategory(entry.id, entry.items, labels, categoryLabels)).join("");
     const store = extendedState.store || emptyMailStore();
+    const index = extendedState.index || emptyMailIndex();
     const queue = extendedState.queue || { pending: [], blocked: [], analysed: [], allowed: [] };
     const classifications = extendedState.classifications || normalizeClassificationCache({});
     const pendingHtml = renderPendingPanel(labels.pending.title, queue.pending, classifications, labels, queue.allowed, false);
@@ -890,8 +939,14 @@ class EmailAnalysisApp {
       <label>${escapeHtml(labels.settings.maxClassification)}
         <input id="autoAnalyzeMaxClassificationLevel" type="number" min="0" max="3" value="${escapeAttr(String(config.autoAnalyzeMaxClassificationLevel || 2))}" />
       </label>
-      <label>${escapeHtml(labels.settings.retentionDays)}
-        <input id="mailRetentionDays" type="number" min="1" value="${escapeAttr(String(config.mailRetentionDays || 30))}" />
+      <label>${escapeHtml(labels.settings.storeRetentionDays)}
+        <input id="mailStoreRetentionDays" type="number" min="1" value="${escapeAttr(String(config.mailStoreRetentionDays || 1))}" />
+      </label>
+      <label>${escapeHtml(labels.settings.indexRetentionDays)}
+        <input id="mailIndexRetentionDays" type="number" min="1" value="${escapeAttr(String(config.mailIndexRetentionDays || 7))}" />
+      </label>
+      <label>${escapeHtml(labels.settings.analysisRetentionDays)}
+        <input id="analysisRetentionDays" type="number" min="1" value="${escapeAttr(String(config.analysisRetentionDays || 7))}" />
       </label>
       <label>${escapeHtml(labels.settings.importantSenders)}
         <input id="importantSenders" value="${escapeAttr(Array.isArray(config.importantSenders) ? config.importantSenders.join(";") : "")}" />
@@ -917,7 +972,7 @@ class EmailAnalysisApp {
     <div><strong>${escapeHtml(labels.meta.lastUsedModel)}:</strong> ${escapeHtml(formatModelInfo(modelInfo, labels))}</div>
   </div>
   <div class="stats">
-    ${renderStat(labels.stats.pulled, store.items.length)}
+    ${renderStat(labels.stats.pulled, index.items.length)}
     ${renderStat(labels.stats.pending, queue.pending.length)}
     ${renderStat(labels.stats.analysed, queue.analysed.length)}
     ${renderStat(labels.stats.blocked, queue.blocked.length)}
@@ -945,7 +1000,9 @@ class EmailAnalysisApp {
           analysisBatchSize: document.getElementById('analysisBatchSize').value,
           autoAnalyzeEnabled: document.getElementById('autoAnalyzeEnabled').value,
           autoAnalyzeMaxClassificationLevel: document.getElementById('autoAnalyzeMaxClassificationLevel').value,
-          mailRetentionDays: document.getElementById('mailRetentionDays').value,
+          mailStoreRetentionDays: document.getElementById('mailStoreRetentionDays').value,
+          mailIndexRetentionDays: document.getElementById('mailIndexRetentionDays').value,
+          analysisRetentionDays: document.getElementById('analysisRetentionDays').value,
           importantSenders: document.getElementById('importantSenders').value
         }
       });
@@ -1136,6 +1193,20 @@ function mergeAnalysisResults(current: AnalysisResult, next: AnalysisResult, all
     generatedAt: new Date().toISOString(),
     overview: {},
     items
+  }, allowedCategories);
+}
+
+function pruneAnalysisResult(analysis: AnalysisResult, retentionDays: number, allowedCategories?: string[], now: Date = new Date()): AnalysisResult {
+  if (!Number.isFinite(retentionDays) || retentionDays <= 0) {
+    return analysis;
+  }
+  const cutoff = now.getTime() - retentionDays * 24 * 60 * 60 * 1000;
+  return normalizeAnalysis({
+    ...analysis,
+    items: analysis.items.filter((item) => {
+      const received = Date.parse(String(item.receivedTime || "").replace(" ", "T"));
+      return !Number.isFinite(received) || received >= cutoff;
+    })
   }, allowedCategories);
 }
 

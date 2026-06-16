@@ -15,7 +15,8 @@ Move from one-shot digest analysis to a local queue-based workflow:
 
 The extension keeps the existing `mail-digest.md` for compatibility, then imports it into:
 
-- `data/mail-store.json`: durable pulled mail records.
+- `data/mail-store.json`: short-lived raw pulled mail records waiting for analysis.
+- `data/mail-index.json`: de-duplication anchors without body content.
 - `data/analysis-result.json`: analysed records returned by Copilot.
 - `data/classification-cache.json`: local classification per mail.
 - `data/prompt-config.json`: user-customisable category and prompt configuration.
@@ -30,12 +31,15 @@ Each pulled mail gets a stable id from Outlook-native fields first:
 
 The hash fallback is only used when Outlook does not expose either native id.
 
-`mail-store.json` is a local JSON document, not SQLite. The current POC keeps this format because it is easy to inspect, easy to delete, and sufficient for a personal local cache. SQLite should be considered later if mailbox volume becomes large enough to require indexed queries.
+`mail-store.json` is a local JSON document, not SQLite. The current POC keeps this format because it is easy to inspect, easy to delete, and sufficient for a short-lived personal local cache. SQLite should be considered later if mailbox volume becomes large enough to require indexed queries.
 
 Retention policy:
 
-- `mailRetentionDays` prunes old local store items after pull.
-- `Clear Local Cache` deletes the local store, classification cache, and analysis result.
+- `mailStoreRetentionDays` prunes old raw local store items after pull. Default: 1 day.
+- Analysed mail is removed from `mail-store.json` after a successful analysis batch.
+- `mailIndexRetentionDays` prunes de-duplication anchors. Default: 7 days.
+- `analysisRetentionDays` prunes analysed summary items. Default: 7 days.
+- `Clear Local Cache` deletes the local store, mail index, classification cache, and analysis result.
 - Original Outlook mail is never deleted by this tool.
 
 ## Workflow
@@ -83,7 +87,7 @@ The extension composes Copilot prompts from:
 
 Users can edit the copied `prompt-config.json` in global storage to add or change categories. The extension validates only that categories have an `id`; unknown category ids from the model are normalised to `uncertain`.
 
-The default category list includes `importantSender`. The dashboard setting `importantSenders` and `prompt-config.json` can list watched senders, managers, executives, or mail groups. The composed prompt instructs Copilot to prefer `importantSender` when sender, recipient group, subject, or body contains those values.
+The default category list includes `importantSender`. The dashboard setting `importantSenders` and `prompt-config.json` can list important senders, mail groups, or keywords. Keyword matches are tags inside `importantSender`, not separate categories.
 
 ## Dashboard
 
