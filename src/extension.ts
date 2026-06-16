@@ -87,8 +87,19 @@ class EmailAnalysisApp {
       throw new Error("No GitHub Copilot model is available in this VS Code session.");
     }
 
-    const prompt = `${promptTemplate}\n\n${digestText}`;
-    const response = await models[0].sendRequest(
+    const selectedModel = models[0];
+    await this.writeModelInfo({
+      requestedFamily: configuredFamily || "auto",
+      usedFallback: preferredModels.length === 0,
+      actualFamily: selectedModel.family,
+      actualId: selectedModel.id,
+      actualName: selectedModel.name,
+      actualVendor: selectedModel.vendor,
+      analyzedAt: new Date().toISOString()
+    });
+
+    const prompt = createAnalysisPrompt(promptTemplate, digestText, String(config.outputLanguage || "zh-CN"));
+    const response = await selectedModel.sendRequest(
       [vscode.LanguageModelChatMessage.User(prompt)],
       {},
       new vscode.CancellationTokenSource().token
@@ -143,6 +154,10 @@ class EmailAnalysisApp {
     return path.join(this.getDataDir(), "ignored.json");
   }
 
+  private getModelInfoPath(): string {
+    return path.join(this.getDataDir(), "model-info.json");
+  }
+
   private async ensureConfig(): Promise<void> {
     await fs.promises.mkdir(this.context.globalStorageUri.fsPath, { recursive: true });
     if (!fs.existsSync(this.getConfigPath())) {
@@ -155,6 +170,10 @@ class EmailAnalysisApp {
     await this.ensureConfig();
     const raw = await fs.promises.readFile(this.getConfigPath(), "utf8");
     return JSON.parse(raw);
+  }
+
+  private async writeConfig(config: Record<string, any>): Promise<void> {
+    await fs.promises.writeFile(this.getConfigPath(), `${JSON.stringify(config, null, 2)}\n`, "utf8");
   }
 
   private async readIgnoredIds(): Promise<string[]> {
@@ -174,6 +193,22 @@ class EmailAnalysisApp {
     await fs.promises.writeFile(this.getIgnoredPath(), JSON.stringify(ids, null, 2), "utf8");
   }
 
+  private async readModelInfo(): Promise<Record<string, unknown>> {
+    if (!fs.existsSync(this.getModelInfoPath())) {
+      return {};
+    }
+
+    try {
+      return JSON.parse(await fs.promises.readFile(this.getModelInfoPath(), "utf8"));
+    } catch {
+      return {};
+    }
+  }
+
+  private async writeModelInfo(info: Record<string, unknown>): Promise<void> {
+    await fs.promises.writeFile(this.getModelInfoPath(), `${JSON.stringify(info, null, 2)}\n`, "utf8");
+  }
+
   private async findCollectorScript(): Promise<string> {
     const candidate = path.join(this.context.extensionPath, "scripts", "collect-outlook-mails.vbs");
     if (fs.existsSync(candidate)) {
@@ -191,7 +226,9 @@ class EmailAnalysisApp {
       ? normalizeAnalysis(JSON.parse(await fs.promises.readFile(this.getAnalysisPath(), "utf8")))
       : { generatedAt: "", overview: { totalMails: 0, mustHandleToday: 0, risks: 0, waitingForMe: 0, notices: 0 }, items: [] };
     const ignoredIds = await this.readIgnoredIds();
-    return buildDashboardState(config, digest, analysis, ignoredIds);
+    const state = buildDashboardState(config, digest, analysis, ignoredIds) as DashboardState & { modelInfo?: Record<string, unknown> };
+    state.modelInfo = await this.readModelInfo();
+    return state;
   }
 
   private async handleMessage(message: unknown): Promise<void> {
@@ -199,7 +236,7 @@ class EmailAnalysisApp {
       return;
     }
 
-    const typed = message as { type?: string; draftReply?: string; mailId?: string };
+    const typed = message as { type?: string; draftReply?: string; mailId?: string; config?: unknown };
     if (typed.type === "copyDraft") {
       await vscode.env.clipboard.writeText(String(typed.draftReply || ""));
       await vscode.window.showInformationMessage("Draft reply copied.");
@@ -228,13 +265,62 @@ class EmailAnalysisApp {
 
     if (typed.type === "openSummary") {
       await this.openSummary();
+      return;
     }
+
+    if (typed.type === "pullMail") {
+      await this.pullMail(false);
+      return;
+    }
+
+    if (typed.type === "sampleDigest") {
+      await this.pullMail(true);
+      return;
+    }
+
+    if (typed.type === "analyze") {
+      await this.analyze();
+      return;
+    }
+
+    if (typed.type === "openSettings") {
+      await this.openSettings();
+      return;
+    }
+
+    if (typed.type === "saveConfig") {
+      await this.saveConfigFromMessage(typed);
+      await this.refresh();
+    }
+  }
+
+  private async saveConfigFromMessage(message: { config?: unknown }): Promise<void> {
+    if (!message.config || typeof message.config !== "object") {
+      return;
+    }
+
+    const current = await this.readConfig();
+    const patch = message.config as Record<string, unknown>;
+    const next = {
+      ...current,
+      rangeMode: patch.rangeMode === "maxItems" ? "maxItems" : "recentHours",
+      recentHours: positiveNumber(patch.recentHours, current.recentHours || 24),
+      maxItems: positiveNumber(patch.maxItems, current.maxItems || 50),
+      folders: parseFolders(patch.folders, current.folders || ["Inbox"]),
+      bodyExcerptChars: positiveNumber(patch.bodyExcerptChars, current.bodyExcerptChars || 1200),
+      outputLanguage: patch.outputLanguage === "en-US" ? "en-US" : "zh-CN",
+      modelFamily: String(patch.modelFamily || current.modelFamily || "gpt-5.4").trim()
+    };
+    await this.writeConfig(next);
+    await vscode.window.showInformationMessage("Email Analysis settings saved.");
   }
 
   private async getDashboardHtml(): Promise<string> {
     const state = await this.loadState();
     const rows = CATEGORY_ORDER.map((category) => renderCategory(category, state.categories.find((entry) => entry.id === category)?.items || [])).join("");
     const digestMeta = state.digestMetadata || {};
+    const modelInfo = (state as DashboardState & { modelInfo?: Record<string, unknown> }).modelInfo || {};
+    const config = state.config as Record<string, unknown>;
 
     return `<!doctype html>
 <html>
@@ -246,12 +332,18 @@ class EmailAnalysisApp {
     .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
     button { border: 0; border-radius: 8px; padding: 8px 12px; background: #0f4c5c; color: #fff; cursor: pointer; }
     button.secondary { background: #d8c3a5; color: #2f2a24; }
+    button.ghost { background: #e9e1d4; color: #2f2a24; }
+    .settings { background: #fff; border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #41515a; }
+    input, select { border: 1px solid #d8c3a5; border-radius: 6px; padding: 6px 8px; background: #fffdf8; color: #1b2a34; }
     .meta { background: #fff; border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; }
     .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
     .stat { background: #fff; padding: 10px; border-radius: 10px; }
     .stat .value { font-size: 22px; font-weight: 700; }
-    .category { margin-bottom: 16px; }
-    .category h2 { font-size: 16px; margin: 0 0 8px; }
+    details.category { margin-bottom: 12px; background: #fff; border-radius: 10px; padding: 8px 10px; }
+    details.category summary { cursor: pointer; font-weight: 700; font-size: 16px; }
+    details.category .category-body { margin-top: 8px; }
     .card { background: #fff; border-radius: 10px; padding: 12px; margin-bottom: 8px; }
     .header { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
     .title { font-weight: 700; }
@@ -264,14 +356,54 @@ class EmailAnalysisApp {
 </head>
 <body>
   <div class="toolbar">
+    <button onclick="post('pullMail')">Pull Mail</button>
+    <button onclick="post('sampleDigest')">Sample</button>
+    <button onclick="post('analyze')">Analyze</button>
     <button onclick="post('refresh')">Refresh</button>
     <button class="secondary" onclick="post('openDigest')">Open Digest</button>
     <button class="secondary" onclick="post('openSummary')">Open Summary</button>
+    <button class="ghost" onclick="post('openSettings')">Settings File</button>
+  </div>
+  <div class="settings">
+    <div class="grid">
+      <label>Range
+        <select id="rangeMode">
+          <option value="recentHours" ${selected(config.rangeMode, "recentHours")}>Recent Hours</option>
+          <option value="maxItems" ${selected(config.rangeMode, "maxItems")}>Max Items</option>
+        </select>
+      </label>
+      <label>Output
+        <select id="outputLanguage">
+          <option value="zh-CN" ${selected(config.outputLanguage, "zh-CN")}>中文分析</option>
+          <option value="en-US" ${selected(config.outputLanguage, "en-US")}>English analysis</option>
+        </select>
+      </label>
+      <label>Recent Hours
+        <input id="recentHours" type="number" min="1" value="${escapeAttr(String(config.recentHours || 24))}" />
+      </label>
+      <label>Max Items
+        <input id="maxItems" type="number" min="1" value="${escapeAttr(String(config.maxItems || 50))}" />
+      </label>
+      <label>Folders (; separated)
+        <input id="folders" value="${escapeAttr(Array.isArray(config.folders) ? config.folders.join(";") : "Inbox")}" />
+      </label>
+      <label>Body Chars
+        <input id="bodyExcerptChars" type="number" min="100" value="${escapeAttr(String(config.bodyExcerptChars || 1200))}" />
+      </label>
+      <label>Model Family
+        <input id="modelFamily" value="${escapeAttr(String(config.modelFamily || "gpt-5.4"))}" />
+      </label>
+    </div>
+    <div class="toolbar" style="margin: 10px 0 0">
+      <button class="secondary" onclick="saveConfig()">Save Settings</button>
+    </div>
   </div>
   <div class="meta">
     <div><strong>Range:</strong> ${escapeHtml(digestMeta.rangeMode || "-")} / ${escapeHtml(String(digestMeta.recentHours || "-"))}h</div>
     <div><strong>Folders:</strong> ${escapeHtml((digestMeta.folders || []).join(", ") || "-")}</div>
     <div><strong>Generated:</strong> ${escapeHtml(digestMeta.generatedAt || "-")}</div>
+    <div><strong>Requested model:</strong> ${escapeHtml(String(config.modelFamily || "gpt-5.4"))}</div>
+    <div><strong>Last used model:</strong> ${escapeHtml(formatModelInfo(modelInfo))}</div>
   </div>
   <div class="stats">
     ${renderStat("Must Handle", state.overview.mustHandleToday)}
@@ -283,6 +415,19 @@ class EmailAnalysisApp {
   <script>
     const vscode = acquireVsCodeApi();
     function post(type, extra) { vscode.postMessage(Object.assign({ type }, extra || {})); }
+    function saveConfig() {
+      post('saveConfig', {
+        config: {
+          rangeMode: document.getElementById('rangeMode').value,
+          outputLanguage: document.getElementById('outputLanguage').value,
+          recentHours: document.getElementById('recentHours').value,
+          maxItems: document.getElementById('maxItems').value,
+          folders: document.getElementById('folders').value,
+          bodyExcerptChars: document.getElementById('bodyExcerptChars').value,
+          modelFamily: document.getElementById('modelFamily').value
+        }
+      });
+    }
   </script>
 </body>
 </html>`;
@@ -320,7 +465,8 @@ function renderStat(label: string, value: number | undefined): string {
 
 function renderCategory(category: string, items: AnalysisResult["items"]): string {
   const cards = items.length ? items.map(renderCard).join("") : `<div class="empty">No items</div>`;
-  return `<section class="category"><h2>${escapeHtml(CATEGORY_TITLES[category] || category)}</h2>${cards}</section>`;
+  const open = category === "mustHandleToday" ? " open" : "";
+  return `<details class="category"${open}><summary>${escapeHtml(CATEGORY_TITLES[category] || category)} (${items.length})</summary><div class="category-body">${cards}</div></details>`;
 }
 
 function renderCard(item: AnalysisResult["items"][number]): string {
@@ -389,6 +535,45 @@ function escapeHtml(value: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+function escapeAttr(value: string): string {
+  return escapeHtml(value);
+}
+
+function selected(current: unknown, expected: string): string {
+  return String(current || "") === expected ? "selected" : "";
+}
+
+function positiveNumber(value: unknown, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : Number(fallback);
+}
+
+function parseFolders(value: unknown, fallback: string[]): string[] {
+  if (Array.isArray(value)) {
+    return value.map(String).map((item) => item.trim()).filter(Boolean);
+  }
+  const parsed = String(value || "").split(";").map((item) => item.trim()).filter(Boolean);
+  return parsed.length ? parsed : fallback;
+}
+
+function createAnalysisPrompt(template: string, digestText: string, outputLanguage: string): string {
+  const languageInstruction = outputLanguage === "en-US"
+    ? "Write summary, reason, and suggestedAction in English. Keep draftReply in English."
+    : "Write summary, reason, and suggestedAction in Simplified Chinese. Keep original mail excerpts and draftReply in English.";
+  return `${template}\n\nOutput language instruction:\n${languageInstruction}\n\n${digestText}`;
+}
+
+function formatModelInfo(modelInfo: Record<string, unknown>): string {
+  const actualFamily = String(modelInfo.actualFamily || "");
+  const actualName = String(modelInfo.actualName || "");
+  const actualVendor = String(modelInfo.actualVendor || "");
+  const fallback = modelInfo.usedFallback === true ? "fallback" : "preferred";
+  if (!actualFamily && !actualName && !actualVendor) {
+    return "-";
+  }
+  return [actualVendor, actualName || actualFamily, fallback].filter(Boolean).join(" / ");
 }
 
 function toJsLiteral(value: string): string {

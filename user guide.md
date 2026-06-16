@@ -17,6 +17,16 @@
 - `Email Analysis: Open Summary`
 - `Email Analysis: Open Settings`
 
+看板顶部也提供同等按钮：
+
+- `Pull Mail`
+- `Sample`
+- `Analyze`
+- `Refresh`
+- `Open Digest`
+- `Open Summary`
+- `Settings File`
+
 ## 推荐测试路径
 
 ### 无 Outlook / 无 Copilot 的本地演示
@@ -50,6 +60,7 @@ email-analysis.config.json
 - `bodyExcerptChars`
 - `sampleMode`
 - `modelFamily`
+- `outputLanguage`
 
 `rangeMode` 可选值：
 
@@ -63,3 +74,10 @@ AI 分析默认优先请求 `gpt-5.4`。如果当前 VS Code / Copilot 运行时
 ```json
 "modelFamily": "gpt-5.4"
 ```
+
+`outputLanguage` 可选值：
+
+- `zh-CN`：摘要、原因、建议动作使用中文；邮件原文和回复草稿保持英文
+- `en-US`：摘要、原因、建议动作使用英文；邮件原文和回复草稿保持英文
+
+分类面板默认可折叠。`Must Handle Today` 默认展开，其它分类可以按需展开。

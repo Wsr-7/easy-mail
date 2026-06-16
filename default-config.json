@@ -7,5 +7,6 @@
   ],
   "bodyExcerptChars": 1200,
   "sampleMode": false,
-  "modelFamily": "gpt-5.4"
+  "modelFamily": "gpt-5.4",
+  "outputLanguage": "zh-CN"
 }
