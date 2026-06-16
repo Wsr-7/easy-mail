@@ -1122,19 +1122,44 @@ async function readResponseText(stream: AsyncIterable<unknown>): Promise<string>
   return full;
 }
 
-function runProcess(command: string, args: string[]): Promise<void> {
+function runProcess(command: string, args: string[], timeoutMs = 30000): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = cp.spawn(command, args, { windowsHide: true });
+    let stdout = "";
     let stderr = "";
+    let settled = false;
+    const timeout = setTimeout(() => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      child.kill();
+      reject(new Error(`${command} timed out after ${String(timeoutMs)}ms. ${stderr || stdout}`.trim()));
+    }, timeoutMs);
+    child.stdout.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString();
+    });
     child.stderr.on("data", (chunk: Buffer) => {
       stderr += chunk.toString();
     });
-    child.on("error", reject);
+    child.on("error", (error) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timeout);
+      reject(error);
+    });
     child.on("close", (code) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timeout);
       if (code === 0) {
         resolve();
       } else {
-        reject(new Error(stderr || `${command} exited with code ${String(code)}`));
+        reject(new Error(stderr || stdout || `${command} exited with code ${String(code)}`));
       }
     });
   });
