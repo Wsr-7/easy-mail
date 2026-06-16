@@ -10,14 +10,15 @@ const LABELS: Record<string, string> = {
   uncertain: "Uncertain"
 };
 
-export function buildSummaryMarkdown(analysis: AnalysisResult): string {
+export function buildSummaryMarkdown(analysis: AnalysisResult, categoryLabels: Record<string, string> = LABELS): string {
   const lines: string[] = ["# AI Mail Summary", ""];
   lines.push(`GeneratedAt: ${analysis.generatedAt}`);
   lines.push("");
 
-  for (const category of Object.keys(LABELS)) {
+  const categories = unique([...Object.keys(categoryLabels), ...analysis.items.map((item) => item.category)]);
+  for (const category of categories) {
     const items = analysis.items.filter((item) => item.category === category);
-    lines.push(`## ${LABELS[category]}`);
+    lines.push(`## ${categoryLabels[category] || category}`);
     lines.push("");
     if (!items.length) {
       lines.push("- No items");
@@ -46,3 +47,6 @@ export function buildSummaryMarkdown(analysis: AnalysisResult): string {
   return lines.join("\n");
 }
 
+function unique(values: string[]): string[] {
+  return [...new Set(values.filter(Boolean))];
+}

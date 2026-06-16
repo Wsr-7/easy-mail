@@ -4,8 +4,11 @@ import * as path from "node:path";
 import * as cp from "node:child_process";
 import { parseDigest, type DigestData } from "./lib/digest";
 import { normalizeAnalysis, parseAnalysisJson, type AnalysisResult } from "./lib/analysis-schema";
+import { buildQueueState, classificationFor, ensureClassifications, normalizeClassificationCache, type ClassificationCache } from "./lib/classification";
 import { buildSummaryMarkdown } from "./lib/summary";
 import { buildDashboardState, CATEGORY_ORDER, type DashboardState } from "./lib/dashboard-state";
+import { allowedCategoryIds, composeAnalysisPrompt, normalizePromptConfig, type PromptConfig } from "./lib/prompt-config";
+import { buildBatchDigestMarkdown, emptyMailStore, mergeDigestIntoStore, normalizeMailStore, type MailStore, type StoredMail } from "./lib/mail-store";
 
 type Locale = "zh-CN" | "en-US";
 
@@ -16,7 +19,7 @@ type BusyState = {
 };
 
 type DashboardLabels = {
-  toolbar: Record<"pullMail" | "sample" | "analyze" | "refresh" | "openDigest" | "openSummary" | "settingsFile", string>;
+  toolbar: Record<"pullMail" | "sample" | "analyze" | "analyzeSelected" | "analyzeAllAllowed" | "refresh" | "openDigest" | "openSummary" | "settingsFile" | "promptConfig", string>;
   settings: {
     title: string;
     range: string;
@@ -27,16 +30,20 @@ type DashboardLabels = {
     bodyChars: string;
     bodyCharsHelp: string;
     modelFamily: string;
+    batchSize: string;
+    autoAnalyze: string;
+    maxClassification: string;
     save: string;
     recentHoursOption: string;
     maxItemsOption: string;
     zhOption: string;
     enOption: string;
   };
-  meta: Record<"range" | "folders" | "generated" | "requestedModel" | "lastUsedModel", string>;
-  stats: Record<"mustHandle" | "risk" | "waiting" | "notice", string>;
+  meta: Record<"range" | "folders" | "generated" | "requestedModel" | "lastUsedModel" | "lastPull" | "lastImport", string>;
+  stats: Record<"pulled" | "pending" | "analysed" | "blocked" | "mustHandle" | "risk" | "waiting" | "notice", string>;
   categories: Record<string, string>;
   card: Record<"from" | "received" | "summary" | "reason" | "suggestedAction" | "copyDraft" | "ignore" | "noItems", string>;
+  pending: Record<"title" | "blockedTitle" | "classification" | "autoAllowed" | "manualRequired" | "select", string>;
   progress: Record<"pullMail" | "sampleDigest" | "analyze", string> & { detail: string };
   model: Record<"fallback" | "preferred", string>;
 };
@@ -46,11 +53,14 @@ const LABELS: Record<Locale, DashboardLabels> = {
     toolbar: {
       pullMail: "拉取邮件",
       sample: "示例数据",
-      analyze: "分析",
+      analyze: "分析下一批",
+      analyzeSelected: "分析选中",
+      analyzeAllAllowed: "分析全部允许项",
       refresh: "刷新",
       openDigest: "打开邮件摘要",
       openSummary: "打开分析总结",
-      settingsFile: "配置文件"
+      settingsFile: "配置文件",
+      promptConfig: "Prompt 分类配置"
     },
     settings: {
       title: "设置",
@@ -62,6 +72,9 @@ const LABELS: Record<Locale, DashboardLabels> = {
       bodyChars: "正文截断字符数",
       bodyCharsHelp: "限制每封邮件送给 Copilot 的正文长度，避免分析过慢或上下文过大。",
       modelFamily: "请求模型",
+      batchSize: "每批分析数量",
+      autoAnalyze: "允许自动分析",
+      maxClassification: "自动分析最高密级",
       save: "保存设置",
       recentHoursOption: "最近小时数",
       maxItemsOption: "最多邮件数",
@@ -73,9 +86,15 @@ const LABELS: Record<Locale, DashboardLabels> = {
       folders: "文件夹",
       generated: "生成时间",
       requestedModel: "请求模型",
-      lastUsedModel: "上次使用模型"
+      lastUsedModel: "上次使用模型",
+      lastPull: "上次拉取",
+      lastImport: "上次导入"
     },
     stats: {
+      pulled: "已拉取",
+      pending: "未分析",
+      analysed: "已分析",
+      blocked: "需确认",
       mustHandle: "必须处理",
       risk: "风险",
       waiting: "等待回复",
@@ -100,6 +119,14 @@ const LABELS: Record<Locale, DashboardLabels> = {
       ignore: "忽略",
       noItems: "暂无邮件"
     },
+    pending: {
+      title: "未分析邮件",
+      blockedTitle: "需手动确认",
+      classification: "密级",
+      autoAllowed: "允许自动分析",
+      manualRequired: "需要手动确认",
+      select: "选择"
+    },
     progress: {
       pullMail: "正在拉取邮件",
       sampleDigest: "正在生成示例数据",
@@ -115,11 +142,14 @@ const LABELS: Record<Locale, DashboardLabels> = {
     toolbar: {
       pullMail: "Pull Mail",
       sample: "Sample",
-      analyze: "Analyze",
+      analyze: "Analyze Next Batch",
+      analyzeSelected: "Analyze Selected",
+      analyzeAllAllowed: "Analyze All Allowed",
       refresh: "Refresh",
       openDigest: "Open Digest",
       openSummary: "Open Summary",
-      settingsFile: "Settings File"
+      settingsFile: "Settings File",
+      promptConfig: "Prompt Config"
     },
     settings: {
       title: "Settings",
@@ -131,6 +161,9 @@ const LABELS: Record<Locale, DashboardLabels> = {
       bodyChars: "Body Chars",
       bodyCharsHelp: "Limits how many body characters per email are sent to Copilot.",
       modelFamily: "Requested Model",
+      batchSize: "Batch Size",
+      autoAnalyze: "Allow Auto Analysis",
+      maxClassification: "Max Auto Classification",
       save: "Save Settings",
       recentHoursOption: "Recent Hours",
       maxItemsOption: "Max Items",
@@ -142,9 +175,15 @@ const LABELS: Record<Locale, DashboardLabels> = {
       folders: "Folders",
       generated: "Generated",
       requestedModel: "Requested model",
-      lastUsedModel: "Last used model"
+      lastUsedModel: "Last used model",
+      lastPull: "Last pull",
+      lastImport: "Last import"
     },
     stats: {
+      pulled: "Pulled",
+      pending: "Pending",
+      analysed: "Analysed",
+      blocked: "Needs Confirm",
       mustHandle: "Must Handle",
       risk: "Risk",
       waiting: "Waiting",
@@ -169,6 +208,14 @@ const LABELS: Record<Locale, DashboardLabels> = {
       ignore: "Ignore",
       noItems: "No items"
     },
+    pending: {
+      title: "Pending Mail",
+      blockedTitle: "Manual Confirmation Required",
+      classification: "Classification",
+      autoAllowed: "Auto allowed",
+      manualRequired: "Manual confirmation required",
+      select: "Select"
+    },
     progress: {
       pullMail: "Pulling mail",
       sampleDigest: "Generating sample digest",
@@ -189,10 +236,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("emailAnalysis.pullMail", () => app.pullMail(false)),
     vscode.commands.registerCommand("emailAnalysis.generateSampleDigest", () => app.pullMail(true)),
     vscode.commands.registerCommand("emailAnalysis.analyze", () => app.analyze()),
+    vscode.commands.registerCommand("emailAnalysis.analyzeAllAllowed", () => app.analyzeAllAllowed()),
     vscode.commands.registerCommand("emailAnalysis.refreshDashboard", () => app.refresh()),
     vscode.commands.registerCommand("emailAnalysis.openDigest", () => app.openDigest()),
     vscode.commands.registerCommand("emailAnalysis.openSummary", () => app.openSummary()),
-    vscode.commands.registerCommand("emailAnalysis.openSettings", () => app.openSettings())
+    vscode.commands.registerCommand("emailAnalysis.openSettings", () => app.openSettings()),
+    vscode.commands.registerCommand("emailAnalysis.openPromptConfig", () => app.openPromptConfig())
   );
 
   await app.initialize();
@@ -240,26 +289,72 @@ class EmailAnalysisApp {
     }
 
     await runProcess("cscript.exe", args);
+    const digest = parseDigest(await fs.promises.readFile(this.getDigestPath(), "utf8"));
+    const merge = mergeDigestIntoStore(await this.readMailStore(), digest);
+    await this.writeMailStore(merge.store);
+    const classificationCache = ensureClassifications(merge.store.items, await this.readClassificationCache());
+    await this.writeClassificationCache(classificationCache);
     await this.refresh();
-    await vscode.window.showInformationMessage("Email digest generated.");
+    await vscode.window.showInformationMessage(`Email digest generated. Added ${merge.added}, skipped ${merge.skipped}.`);
   }
 
   public async analyze(): Promise<void> {
     const locale = await this.readLocale();
     const labels = getLabels(locale);
     await this.runWithBusy(labels.progress.analyze, labels.progress.detail, async () => {
-      await this.analyzeCore();
+      await this.analyzeBatchCore();
     });
   }
 
-  private async analyzeCore(): Promise<void> {
-    if (!fs.existsSync(this.getDigestPath())) {
-      throw new Error("Digest file does not exist. Run Pull Mail first.");
+  public async analyzeAllAllowed(): Promise<void> {
+    const locale = await this.readLocale();
+    const labels = getLabels(locale);
+    await this.runWithBusy(labels.progress.analyze, labels.progress.detail, async () => {
+      await this.analyzeBatchCore("allAllowed");
+    });
+  }
+
+  private async analyzeSelected(mailIds: string[]): Promise<void> {
+    const locale = await this.readLocale();
+    const labels = getLabels(locale);
+    await this.runWithBusy(labels.progress.analyze, labels.progress.detail, async () => {
+      await this.analyzeBatchCore(mailIds);
+    });
+  }
+
+  private async analyzeBatchCore(selection?: "allAllowed" | string[]): Promise<void> {
+    const config = await this.readConfig();
+    await this.importDigestIfStoreMissing();
+    const store = await this.readMailStore();
+    if (!store.items.length) {
+      throw new Error("No pulled mail exists. Run Pull Mail first.");
+    }
+    const classificationCache = ensureClassifications(store.items, await this.readClassificationCache());
+    await this.writeClassificationCache(classificationCache);
+    const currentAnalysis = await this.readAnalysisResult();
+    const ignoredIds = await this.readIgnoredIds();
+    const queue = buildQueueState(
+      store.items,
+      currentAnalysis,
+      ignoredIds,
+      classificationCache,
+      config.autoAnalyzeEnabled !== false,
+      Number(config.autoAnalyzeMaxClassificationLevel || 2)
+    );
+    const batchSize = Number(config.analysisBatchSize || 5);
+    const batch = Array.isArray(selection)
+      ? store.items.filter((item) => selection.includes(item.mailId) && !ignoredIds.includes(item.mailId))
+      : selection === "allAllowed"
+        ? queue.allowed
+        : queue.allowed.slice(0, batchSize);
+    if (!batch.length) {
+      throw new Error("No mail is available for analysis. Check pending mail or classification gates.");
     }
 
-    const config = await this.readConfig();
-    const digestText = await fs.promises.readFile(this.getDigestPath(), "utf8");
-    const promptTemplate = await fs.promises.readFile(path.join(this.context.extensionPath, "prompts", "analysis-prompt.md"), "utf8");
+    const promptConfig = await this.readPromptConfig();
+    const digestText = buildBatchDigestMarkdown(batch);
+    const basePrompt = await fs.promises.readFile(path.join(this.context.extensionPath, "prompts", "base-system.md"), "utf8");
+    const outputSchemaPrompt = await fs.promises.readFile(path.join(this.context.extensionPath, "prompts", "output-schema.md"), "utf8");
     const configuredFamily = typeof config.modelFamily === "string" ? config.modelFamily.trim() : "gpt-5.4";
     const preferredModels = configuredFamily
       ? await vscode.lm.selectChatModels({ vendor: "copilot", family: configuredFamily })
@@ -280,20 +375,28 @@ class EmailAnalysisApp {
       analyzedAt: new Date().toISOString()
     });
 
-    const prompt = createAnalysisPrompt(promptTemplate, digestText, String(config.outputLanguage || "zh-CN"));
+    const prompt = composeAnalysisPrompt({
+      basePrompt,
+      outputSchemaPrompt,
+      digestText,
+      outputLanguage: String(config.outputLanguage || "zh-CN"),
+      promptConfig
+    });
     const response = await selectedModel.sendRequest(
       [vscode.LanguageModelChatMessage.User(prompt)],
       {},
       new vscode.CancellationTokenSource().token
     );
     const raw = await readResponseText(response.text);
-    const analysis = parseAnalysisJson(raw);
+    const analysis = parseAnalysisJson(raw, allowedCategoryIds(promptConfig));
 
-    const normalized = normalizeAnalysis(analysis);
-    await fs.promises.writeFile(this.getAnalysisPath(), JSON.stringify(normalized, null, 2), "utf8");
-    await fs.promises.writeFile(this.getSummaryPath(), buildSummaryMarkdown(normalized), "utf8");
+    const normalized = normalizeAnalysis(analysis, allowedCategoryIds(promptConfig));
+    const merged = mergeAnalysisResults(currentAnalysis, normalized, allowedCategoryIds(promptConfig));
+    const summaryLabels = buildCategoryLabels(getLabels(getLocaleFromConfig(config)), promptConfig, getLocaleFromConfig(config));
+    await fs.promises.writeFile(this.getAnalysisPath(), `${JSON.stringify(merged, null, 2)}\n`, "utf8");
+    await fs.promises.writeFile(this.getSummaryPath(), buildSummaryMarkdown(merged, summaryLabels), "utf8");
     await this.refresh();
-    await vscode.window.showInformationMessage("Email analysis completed.");
+    await vscode.window.showInformationMessage(`Email analysis completed for ${batch.length} mail(s).`);
   }
 
   private async runWithBusy<T>(label: string, detail: string, task: () => Promise<T>): Promise<T> {
@@ -329,6 +432,10 @@ class EmailAnalysisApp {
     await openTextDocument(this.getConfigPath());
   }
 
+  public async openPromptConfig(): Promise<void> {
+    await openTextDocument(this.getPromptConfigPath());
+  }
+
   private getDataDir(): string {
     return path.join(this.context.globalStorageUri.fsPath, "data");
   }
@@ -357,11 +464,27 @@ class EmailAnalysisApp {
     return path.join(this.getDataDir(), "model-info.json");
   }
 
+  private getMailStorePath(): string {
+    return path.join(this.getDataDir(), "mail-store.json");
+  }
+
+  private getClassificationCachePath(): string {
+    return path.join(this.getDataDir(), "classification-cache.json");
+  }
+
+  private getPromptConfigPath(): string {
+    return path.join(this.context.globalStorageUri.fsPath, "prompt-config.json");
+  }
+
   private async ensureConfig(): Promise<void> {
     await fs.promises.mkdir(this.context.globalStorageUri.fsPath, { recursive: true });
     if (!fs.existsSync(this.getConfigPath())) {
       const defaults = path.join(this.context.extensionPath, "default-config.json");
       await fs.promises.copyFile(defaults, this.getConfigPath());
+    }
+    if (!fs.existsSync(this.getPromptConfigPath())) {
+      const defaults = path.join(this.context.extensionPath, "prompts", "prompt-config.default.json");
+      await fs.promises.copyFile(defaults, this.getPromptConfigPath());
     }
   }
 
@@ -416,6 +539,68 @@ class EmailAnalysisApp {
     await fs.promises.writeFile(this.getModelInfoPath(), `${JSON.stringify(info, null, 2)}\n`, "utf8");
   }
 
+  private async readAnalysisResult(): Promise<AnalysisResult> {
+    if (!fs.existsSync(this.getAnalysisPath())) {
+      return { generatedAt: "", overview: { totalMails: 0, mustHandleToday: 0, risks: 0, waitingForMe: 0, notices: 0 }, items: [] };
+    }
+    try {
+      const promptConfig = await this.readPromptConfig();
+      return normalizeAnalysis(JSON.parse(await fs.promises.readFile(this.getAnalysisPath(), "utf8")), allowedCategoryIds(promptConfig));
+    } catch {
+      return { generatedAt: "", overview: { totalMails: 0, mustHandleToday: 0, risks: 0, waitingForMe: 0, notices: 0 }, items: [] };
+    }
+  }
+
+  private async readMailStore(): Promise<MailStore> {
+    if (!fs.existsSync(this.getMailStorePath())) {
+      return emptyMailStore();
+    }
+    try {
+      return normalizeMailStore(JSON.parse(await fs.promises.readFile(this.getMailStorePath(), "utf8")));
+    } catch {
+      return emptyMailStore();
+    }
+  }
+
+  private async writeMailStore(store: MailStore): Promise<void> {
+    await fs.promises.writeFile(this.getMailStorePath(), `${JSON.stringify(store, null, 2)}\n`, "utf8");
+  }
+
+  private async readClassificationCache(): Promise<ClassificationCache> {
+    if (!fs.existsSync(this.getClassificationCachePath())) {
+      return normalizeClassificationCache({});
+    }
+    try {
+      return normalizeClassificationCache(JSON.parse(await fs.promises.readFile(this.getClassificationCachePath(), "utf8")));
+    } catch {
+      return normalizeClassificationCache({});
+    }
+  }
+
+  private async writeClassificationCache(cache: ClassificationCache): Promise<void> {
+    await fs.promises.writeFile(this.getClassificationCachePath(), `${JSON.stringify(cache, null, 2)}\n`, "utf8");
+  }
+
+  private async readPromptConfig(): Promise<PromptConfig> {
+    await this.ensureConfig();
+    try {
+      return normalizePromptConfig(JSON.parse(await fs.promises.readFile(this.getPromptConfigPath(), "utf8")));
+    } catch {
+      return normalizePromptConfig({});
+    }
+  }
+
+  private async importDigestIfStoreMissing(): Promise<void> {
+    const store = await this.readMailStore();
+    if (store.items.length || !fs.existsSync(this.getDigestPath())) {
+      return;
+    }
+    const digest = parseDigest(await fs.promises.readFile(this.getDigestPath(), "utf8"));
+    const merge = mergeDigestIntoStore(store, digest);
+    await this.writeMailStore(merge.store);
+    await this.writeClassificationCache(ensureClassifications(merge.store.items, await this.readClassificationCache()));
+  }
+
   private async findCollectorScript(): Promise<string> {
     const candidate = path.join(this.context.extensionPath, "scripts", "collect-outlook-mails.vbs");
     if (fs.existsSync(candidate)) {
@@ -429,12 +614,32 @@ class EmailAnalysisApp {
     const digest: DigestData = fs.existsSync(this.getDigestPath())
       ? parseDigest(await fs.promises.readFile(this.getDigestPath(), "utf8"))
       : { metadata: { generatedAt: "", rangeMode: "", recentHours: 0, maxItems: 0, folders: [] }, items: [] };
-    const analysis: AnalysisResult = fs.existsSync(this.getAnalysisPath())
-      ? normalizeAnalysis(JSON.parse(await fs.promises.readFile(this.getAnalysisPath(), "utf8")))
-      : { generatedAt: "", overview: { totalMails: 0, mustHandleToday: 0, risks: 0, waitingForMe: 0, notices: 0 }, items: [] };
+    const promptConfig = await this.readPromptConfig();
+    const analysis = await this.readAnalysisResult();
     const ignoredIds = await this.readIgnoredIds();
-    const state = buildDashboardState(config, digest, analysis, ignoredIds) as DashboardState & { modelInfo?: Record<string, unknown> };
+    const store = await this.readMailStore();
+    const classifications = ensureClassifications(store.items, await this.readClassificationCache());
+    await this.writeClassificationCache(classifications);
+    const queue = buildQueueState(
+      store.items,
+      analysis,
+      ignoredIds,
+      classifications,
+      config.autoAnalyzeEnabled !== false,
+      Number(config.autoAnalyzeMaxClassificationLevel || 2)
+    );
+    const state = buildDashboardState(config, digest, analysis, ignoredIds, allowedCategoryIds(promptConfig)) as DashboardState & {
+      modelInfo?: Record<string, unknown>;
+      store?: MailStore;
+      queue?: ReturnType<typeof buildQueueState>;
+      classifications?: ClassificationCache;
+      promptConfig?: PromptConfig;
+    };
     state.modelInfo = await this.readModelInfo();
+    state.store = store;
+    state.queue = queue;
+    state.classifications = classifications;
+    state.promptConfig = promptConfig;
     return state;
   }
 
@@ -443,7 +648,7 @@ class EmailAnalysisApp {
       return;
     }
 
-    const typed = message as { type?: string; draftReply?: string; mailId?: string; config?: unknown };
+    const typed = message as { type?: string; draftReply?: string; mailId?: string; mailIds?: string[]; config?: unknown };
     if (typed.type === "copyDraft") {
       await vscode.env.clipboard.writeText(String(typed.draftReply || ""));
       await vscode.window.showInformationMessage("Draft reply copied.");
@@ -490,8 +695,23 @@ class EmailAnalysisApp {
       return;
     }
 
+    if (typed.type === "analyzeAllAllowed") {
+      await this.analyzeAllAllowed();
+      return;
+    }
+
+    if (typed.type === "analyzeSelected") {
+      await this.analyzeSelected(Array.isArray(typed.mailIds) ? typed.mailIds.map(String) : []);
+      return;
+    }
+
     if (typed.type === "openSettings") {
       await this.openSettings();
+      return;
+    }
+
+    if (typed.type === "openPromptConfig") {
+      await this.openPromptConfig();
       return;
     }
 
@@ -516,7 +736,10 @@ class EmailAnalysisApp {
       folders: parseFolders(patch.folders, current.folders || ["Inbox"]),
       bodyExcerptChars: positiveNumber(patch.bodyExcerptChars, current.bodyExcerptChars || 1200),
       outputLanguage: patch.outputLanguage === "en-US" ? "en-US" : "zh-CN",
-      modelFamily: String(patch.modelFamily || current.modelFamily || "gpt-5.4").trim()
+      modelFamily: String(patch.modelFamily || current.modelFamily || "gpt-5.4").trim(),
+      analysisBatchSize: positiveNumber(patch.analysisBatchSize, current.analysisBatchSize || 5),
+      autoAnalyzeEnabled: patch.autoAnalyzeEnabled === true || patch.autoAnalyzeEnabled === "true",
+      autoAnalyzeMaxClassificationLevel: positiveNumber(patch.autoAnalyzeMaxClassificationLevel, current.autoAnalyzeMaxClassificationLevel || 2)
     };
     await this.writeConfig(next);
     await vscode.window.showInformationMessage("Email Analysis settings saved.");
@@ -527,9 +750,22 @@ class EmailAnalysisApp {
     const digestMeta = state.digestMetadata || {};
     const modelInfo = (state as DashboardState & { modelInfo?: Record<string, unknown> }).modelInfo || {};
     const config = state.config as Record<string, unknown>;
+    const extendedState = state as DashboardState & {
+      store?: MailStore;
+      queue?: ReturnType<typeof buildQueueState>;
+      classifications?: ClassificationCache;
+      promptConfig?: PromptConfig;
+    };
     const locale = getLocaleFromConfig(config);
     const labels = getLabels(locale);
-    const rows = CATEGORY_ORDER.map((category) => renderCategory(category, state.categories.find((entry) => entry.id === category)?.items || [], labels)).join("");
+    const promptConfig = extendedState.promptConfig || normalizePromptConfig({});
+    const categoryLabels = buildCategoryLabels(labels, promptConfig, locale);
+    const rows = state.categories.map((entry) => renderCategory(entry.id, entry.items, labels, categoryLabels)).join("");
+    const store = extendedState.store || emptyMailStore();
+    const queue = extendedState.queue || { pending: [], blocked: [], analysed: [], allowed: [] };
+    const classifications = extendedState.classifications || normalizeClassificationCache({});
+    const pendingHtml = renderPendingPanel(labels.pending.title, queue.pending, classifications, labels, queue.allowed, false);
+    const blockedHtml = renderPendingPanel(labels.pending.blockedTitle, queue.blocked, classifications, labels, [], true);
     const busyHtml = this.busy
       ? `<div class="busy"><div class="busy-row"><strong>${escapeHtml(this.busy.label)}</strong><span>${escapeHtml(this.busy.detail)}</span></div><div class="busy-bar"><span></span></div></div>`
       : "";
@@ -579,10 +815,13 @@ class EmailAnalysisApp {
     <button onclick="post('pullMail')">${escapeHtml(labels.toolbar.pullMail)}</button>
     <button onclick="post('sampleDigest')">${escapeHtml(labels.toolbar.sample)}</button>
     <button onclick="post('analyze')">${escapeHtml(labels.toolbar.analyze)}</button>
+    <button onclick="analyzeSelected()">${escapeHtml(labels.toolbar.analyzeSelected)}</button>
+    <button onclick="post('analyzeAllAllowed')">${escapeHtml(labels.toolbar.analyzeAllAllowed)}</button>
     <button onclick="post('refresh')">${escapeHtml(labels.toolbar.refresh)}</button>
     <button class="secondary" onclick="post('openDigest')">${escapeHtml(labels.toolbar.openDigest)}</button>
     <button class="secondary" onclick="post('openSummary')">${escapeHtml(labels.toolbar.openSummary)}</button>
     <button class="ghost" onclick="post('openSettings')">${escapeHtml(labels.toolbar.settingsFile)}</button>
+    <button class="ghost" onclick="post('openPromptConfig')">${escapeHtml(labels.toolbar.promptConfig)}</button>
   </div>
   ${busyHtml}
   <details class="settings">
@@ -617,6 +856,18 @@ class EmailAnalysisApp {
       <label>${escapeHtml(labels.settings.modelFamily)}
         <input id="modelFamily" value="${escapeAttr(String(config.modelFamily || "gpt-5.4"))}" />
       </label>
+      <label>${escapeHtml(labels.settings.batchSize)}
+        <input id="analysisBatchSize" type="number" min="1" value="${escapeAttr(String(config.analysisBatchSize || 5))}" />
+      </label>
+      <label>${escapeHtml(labels.settings.maxClassification)}
+        <input id="autoAnalyzeMaxClassificationLevel" type="number" min="0" max="4" value="${escapeAttr(String(config.autoAnalyzeMaxClassificationLevel || 2))}" />
+      </label>
+      <label>${escapeHtml(labels.settings.autoAnalyze)}
+        <select id="autoAnalyzeEnabled">
+          <option value="true" ${selected(config.autoAnalyzeEnabled, true)}>${escapeHtml(labels.pending.autoAllowed)}</option>
+          <option value="false" ${selected(config.autoAnalyzeEnabled, false)}>${escapeHtml(labels.pending.manualRequired)}</option>
+        </select>
+      </label>
       </div>
       <div class="toolbar" style="margin: 10px 0 0">
         <button class="secondary" onclick="saveConfig()">${escapeHtml(labels.settings.save)}</button>
@@ -627,15 +878,22 @@ class EmailAnalysisApp {
     <div><strong>${escapeHtml(labels.meta.range)}:</strong> ${escapeHtml(digestMeta.rangeMode || "-")} / ${escapeHtml(String(digestMeta.recentHours || "-"))}h</div>
     <div><strong>${escapeHtml(labels.meta.folders)}:</strong> ${escapeHtml((digestMeta.folders || []).join(", ") || "-")}</div>
     <div><strong>${escapeHtml(labels.meta.generated)}:</strong> ${escapeHtml(digestMeta.generatedAt || "-")}</div>
+    <div><strong>${escapeHtml(labels.meta.lastPull)}:</strong> ${escapeHtml(store.lastPullAt || "-")}</div>
     <div><strong>${escapeHtml(labels.meta.requestedModel)}:</strong> ${escapeHtml(String(config.modelFamily || "gpt-5.4"))}</div>
     <div><strong>${escapeHtml(labels.meta.lastUsedModel)}:</strong> ${escapeHtml(formatModelInfo(modelInfo, labels))}</div>
   </div>
   <div class="stats">
+    ${renderStat(labels.stats.pulled, store.items.length)}
+    ${renderStat(labels.stats.pending, queue.pending.length)}
+    ${renderStat(labels.stats.analysed, queue.analysed.length)}
+    ${renderStat(labels.stats.blocked, queue.blocked.length)}
     ${renderStat(labels.stats.mustHandle, state.overview.mustHandleToday)}
     ${renderStat(labels.stats.risk, state.overview.risks)}
     ${renderStat(labels.stats.waiting, state.overview.waitingForMe)}
     ${renderStat(labels.stats.notice, state.overview.notices)}
   </div>
+  ${pendingHtml}
+  ${blockedHtml}
   ${rows}
   <script>
     const vscode = acquireVsCodeApi();
@@ -649,9 +907,16 @@ class EmailAnalysisApp {
           maxItems: document.getElementById('maxItems').value,
           folders: document.getElementById('folders').value,
           bodyExcerptChars: document.getElementById('bodyExcerptChars').value,
-          modelFamily: document.getElementById('modelFamily').value
+          modelFamily: document.getElementById('modelFamily').value,
+          analysisBatchSize: document.getElementById('analysisBatchSize').value,
+          autoAnalyzeEnabled: document.getElementById('autoAnalyzeEnabled').value,
+          autoAnalyzeMaxClassificationLevel: document.getElementById('autoAnalyzeMaxClassificationLevel').value
         }
       });
+    }
+    function analyzeSelected() {
+      const checked = Array.from(document.querySelectorAll('input[data-mail-id]:checked')).map((input) => input.getAttribute('data-mail-id'));
+      post('analyzeSelected', { mailIds: checked });
     }
   </script>
 </body>
@@ -691,10 +956,36 @@ function renderStat(label: string, value: number | undefined): string {
   return `<div class="stat"><div>${escapeHtml(label)}</div><div class="value">${escapeHtml(String(value || 0))}</div></div>`;
 }
 
-function renderCategory(category: string, items: AnalysisResult["items"], labels: DashboardLabels): string {
+function renderCategory(category: string, items: AnalysisResult["items"], labels: DashboardLabels, categoryLabels: Record<string, string>): string {
   const cards = items.length ? items.map((item) => renderCard(item, labels)).join("") : `<div class="empty">${escapeHtml(labels.card.noItems)}</div>`;
   const open = category === "mustHandleToday" ? " open" : "";
-  return `<details class="category"${open}><summary>${escapeHtml(labels.categories[category] || category)} (${items.length})</summary><div class="category-body">${cards}</div></details>`;
+  return `<details class="category"${open}><summary>${escapeHtml(categoryLabels[category] || labels.categories[category] || category)} (${items.length})</summary><div class="category-body">${cards}</div></details>`;
+}
+
+function renderPendingPanel(
+  title: string,
+  items: StoredMail[],
+  classifications: ClassificationCache,
+  labels: DashboardLabels,
+  allowedItems: StoredMail[],
+  blocked: boolean
+): string {
+  const allowed = new Set(allowedItems.map((item) => item.mailId));
+  const cards = items.length ? items.map((item) => {
+    const classification = classificationFor(item.mailId, classifications);
+    const status = blocked || !allowed.has(item.mailId) ? labels.pending.manualRequired : labels.pending.autoAllowed;
+    return `<article class="card pending-card">
+      <div class="header">
+        <label class="select-row"><input type="checkbox" data-mail-id="${escapeAttr(item.mailId)}" /> ${escapeHtml(labels.pending.select)}</label>
+        <div class="badge">${escapeHtml(status)}</div>
+      </div>
+      <div class="title">${escapeHtml(item.subject || item.mailId)}</div>
+      <div><strong>${escapeHtml(labels.card.from)}:</strong> ${escapeHtml(item.from || "-")}</div>
+      <div><strong>${escapeHtml(labels.card.received)}:</strong> ${escapeHtml(item.receivedTime || "-")}</div>
+      <div><strong>${escapeHtml(labels.pending.classification)}:</strong> ${escapeHtml(formatClassification(classification))}</div>
+    </article>`;
+  }).join("") : `<div class="empty">${escapeHtml(labels.card.noItems)}</div>`;
+  return `<details class="category"${blocked ? "" : " open"}><summary>${escapeHtml(title)} (${items.length})</summary><div class="category-body">${cards}</div></details>`;
 }
 
 function renderCard(item: AnalysisResult["items"][number], labels: DashboardLabels): string {
@@ -769,8 +1060,8 @@ function escapeAttr(value: string): string {
   return escapeHtml(value);
 }
 
-function selected(current: unknown, expected: string): string {
-  return String(current || "") === expected ? "selected" : "";
+function selected(current: unknown, expected: unknown): string {
+  return String(current ?? "") === String(expected) ? "selected" : "";
 }
 
 function getLocaleFromConfig(config: Record<string, unknown>): Locale {
@@ -779,6 +1070,37 @@ function getLocaleFromConfig(config: Record<string, unknown>): Locale {
 
 function getLabels(locale: Locale): DashboardLabels {
   return LABELS[locale] || LABELS["zh-CN"];
+}
+
+function buildCategoryLabels(labels: DashboardLabels, promptConfig: PromptConfig, locale: Locale): Record<string, string> {
+  const result: Record<string, string> = { ...labels.categories };
+  for (const category of promptConfig.categories) {
+    result[category.id] = locale === "en-US" ? category.labelEn : category.labelZh;
+  }
+  return result;
+}
+
+function formatClassification(classification: ReturnType<typeof classificationFor>): string {
+  if (!classification) {
+    return "-";
+  }
+  return `${classification.label} (${classification.level})`;
+}
+
+function mergeAnalysisResults(current: AnalysisResult, next: AnalysisResult, allowedCategories?: string[]): AnalysisResult {
+  const byId = new Map<string, AnalysisResult["items"][number]>();
+  for (const item of current.items || []) {
+    byId.set(item.mailId, item);
+  }
+  for (const item of next.items || []) {
+    byId.set(item.mailId, item);
+  }
+  const items = [...byId.values()];
+  return normalizeAnalysis({
+    generatedAt: new Date().toISOString(),
+    overview: {},
+    items
+  }, allowedCategories);
 }
 
 function positiveNumber(value: unknown, fallback: number): number {
@@ -792,13 +1114,6 @@ function parseFolders(value: unknown, fallback: string[]): string[] {
   }
   const parsed = String(value || "").split(";").map((item) => item.trim()).filter(Boolean);
   return parsed.length ? parsed : fallback;
-}
-
-function createAnalysisPrompt(template: string, digestText: string, outputLanguage: string): string {
-  const languageInstruction = outputLanguage === "en-US"
-    ? "Write summary, reason, and suggestedAction in English. Keep draftReply in English."
-    : "Write summary, reason, and suggestedAction in Simplified Chinese. Keep original mail excerpts and draftReply in English.";
-  return `${template}\n\nOutput language instruction:\n${languageInstruction}\n\n${digestText}`;
 }
 
 function formatModelInfo(modelInfo: Record<string, unknown>, labels: DashboardLabels): string {

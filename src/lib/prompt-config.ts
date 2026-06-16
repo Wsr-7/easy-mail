@@ -1,0 +1,133 @@
+export interface PromptCategory {
+  id: string;
+  labelZh: string;
+  labelEn: string;
+  description: string;
+  priorityHint?: string;
+}
+
+export interface PromptConfig {
+  categories: PromptCategory[];
+  replyDraftInstruction: string;
+}
+
+export const DEFAULT_PROMPT_CONFIG: PromptConfig = {
+  categories: [
+    {
+      id: "mustHandleToday",
+      labelZh: "今天必须处理",
+      labelEn: "Must Handle Today",
+      description: "Requires user's action today.",
+      priorityHint: "Usually P0 or P1"
+    },
+    {
+      id: "risk",
+      labelZh: "风险邮件",
+      labelEn: "Risk",
+      description: "Contains contractual, financial, security, deadline, customer, escalation, or compliance risk.",
+      priorityHint: "Usually P0 or P1"
+    },
+    {
+      id: "waitingForMe",
+      labelZh: "等待我回复",
+      labelEn: "Waiting For Me",
+      description: "Sender is waiting for reply, approval, confirmation, decision, or review.",
+      priorityHint: "Usually P1 or P2"
+    },
+    {
+      id: "followUp",
+      labelZh: "需要跟进",
+      labelEn: "Follow-up",
+      description: "Useful thread that may need later tracking but not immediate action.",
+      priorityHint: "Usually P2"
+    },
+    {
+      id: "notice",
+      labelZh: "普通通知",
+      labelEn: "Notice",
+      description: "Informational notice, newsletter, automatic update, or low-action system mail.",
+      priorityHint: "Usually P3"
+    },
+    {
+      id: "ignored",
+      labelZh: "已忽略",
+      labelEn: "Ignored",
+      description: "Clearly irrelevant or already handled.",
+      priorityHint: "Usually P3"
+    },
+    {
+      id: "uncertain",
+      labelZh: "不确定",
+      labelEn: "Uncertain",
+      description: "Not enough evidence to judge safely.",
+      priorityHint: "Use when context is insufficient"
+    }
+  ],
+  replyDraftInstruction: "Draft replies must stay in English. Leave draftReply empty when no reply is needed."
+};
+
+export function normalizePromptConfig(input: unknown): PromptConfig {
+  const base = isObject(input) ? input : {};
+  const categories = Array.isArray(base.categories)
+    ? base.categories.map(normalizeCategory).filter(Boolean) as PromptCategory[]
+    : DEFAULT_PROMPT_CONFIG.categories;
+  return {
+    categories: categories.length ? categories : DEFAULT_PROMPT_CONFIG.categories,
+    replyDraftInstruction: String(base.replyDraftInstruction || DEFAULT_PROMPT_CONFIG.replyDraftInstruction)
+  };
+}
+
+export function allowedCategoryIds(config: PromptConfig): string[] {
+  return config.categories.map((category) => category.id);
+}
+
+export function composeAnalysisPrompt(input: {
+  basePrompt: string;
+  outputSchemaPrompt: string;
+  digestText: string;
+  outputLanguage: string;
+  promptConfig: PromptConfig;
+}): string {
+  const languageInstruction = input.outputLanguage === "en-US"
+    ? "Write summary, reason, and suggestedAction in English. Keep draftReply in English."
+    : "Write summary, reason, and suggestedAction in Simplified Chinese. Keep original mail excerpts and draftReply in English.";
+  return [
+    input.basePrompt.trim(),
+    "Allowed categories:",
+    renderCategories(input.promptConfig.categories),
+    "Reply draft instruction:",
+    input.promptConfig.replyDraftInstruction,
+    input.outputSchemaPrompt.trim(),
+    "Output language instruction:",
+    languageInstruction,
+    input.digestText
+  ].filter(Boolean).join("\n\n");
+}
+
+function renderCategories(categories: PromptCategory[]): string {
+  return categories.map((category) => {
+    const hint = category.priorityHint ? ` Priority hint: ${category.priorityHint}.` : "";
+    return `- ${category.id}: ${category.description}${hint}`;
+  }).join("\n");
+}
+
+function normalizeCategory(input: unknown): PromptCategory | null {
+  if (!isObject(input)) {
+    return null;
+  }
+  const id = String(input.id || "").trim();
+  if (!id) {
+    return null;
+  }
+  return {
+    id,
+    labelZh: String(input.labelZh || id),
+    labelEn: String(input.labelEn || id),
+    description: String(input.description || ""),
+    priorityHint: input.priorityHint ? String(input.priorityHint) : undefined
+  };
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object";
+}

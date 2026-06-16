@@ -10,7 +10,7 @@ export const VALID_CATEGORIES = new Set([
 
 export const VALID_PRIORITIES = new Set(["P0", "P1", "P2", "P3"] as const);
 
-export type Category = "mustHandleToday" | "risk" | "waitingForMe" | "followUp" | "notice" | "ignored" | "uncertain";
+export type Category = string;
 export type Priority = "P0" | "P1" | "P2" | "P3";
 
 export interface AnalysisItem {
@@ -42,20 +42,21 @@ export interface AnalysisResult {
   items: AnalysisItem[];
 }
 
-export function parseAnalysisJson(raw: string): AnalysisResult {
+export function parseAnalysisJson(raw: string, allowedCategories?: string[]): AnalysisResult {
   const cleaned = stripCodeFence(String(raw || "").trim());
   const parsed = JSON.parse(cleaned);
-  return normalizeAnalysis(parsed);
+  return normalizeAnalysis(parsed, allowedCategories);
 }
 
 export function stripCodeFence(value: string): string {
   return value.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
 }
 
-export function normalizeAnalysis(input: unknown): AnalysisResult {
+export function normalizeAnalysis(input: unknown, allowedCategories?: string[]): AnalysisResult {
   const analysis = isObject(input) ? input : {};
+  const allowed = new Set(allowedCategories && allowedCategories.length ? allowedCategories : [...VALID_CATEGORIES]);
   const items = Array.isArray((analysis as Record<string, unknown>).items)
-    ? ((analysis as Record<string, unknown>).items as unknown[]).map(normalizeItem)
+    ? ((analysis as Record<string, unknown>).items as unknown[]).map((item, index) => normalizeItem(item, index, allowed))
     : [];
 
   return {
@@ -77,9 +78,9 @@ function normalizeOverview(overview: unknown, items: AnalysisItem[]): AnalysisOv
   };
 }
 
-function normalizeItem(item: unknown, index: number): AnalysisItem {
+function normalizeItem(item: unknown, index: number, allowedCategories: Set<string>): AnalysisItem {
   const base = isObject(item) ? item : {};
-  const category = VALID_CATEGORIES.has((base as Record<string, unknown>).category as Category)
+  const category = allowedCategories.has((base as Record<string, unknown>).category as Category)
     ? ((base as Record<string, unknown>).category as Category)
     : "uncertain";
   const priority = VALID_PRIORITIES.has((base as Record<string, unknown>).priority as Priority)
@@ -113,7 +114,7 @@ function groupCounts(items: AnalysisItem[]): Record<Category, number> {
     uncertain: 0
   };
   for (const item of items) {
-    counts[item.category] += 1;
+    counts[item.category] = (counts[item.category] || 0) + 1;
   }
   return counts;
 }
@@ -125,4 +126,3 @@ function numberOr(value: unknown, fallback: number): number {
 function isObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object";
 }
-

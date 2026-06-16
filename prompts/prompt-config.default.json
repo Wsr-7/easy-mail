@@ -1,0 +1,54 @@
+{
+  "categories": [
+    {
+      "id": "mustHandleToday",
+      "labelZh": "今天必须处理",
+      "labelEn": "Must Handle Today",
+      "description": "Requires user's action today.",
+      "priorityHint": "Usually P0 or P1"
+    },
+    {
+      "id": "risk",
+      "labelZh": "风险邮件",
+      "labelEn": "Risk",
+      "description": "Contains contractual, financial, security, deadline, customer, escalation, or compliance risk.",
+      "priorityHint": "Usually P0 or P1"
+    },
+    {
+      "id": "waitingForMe",
+      "labelZh": "等待我回复",
+      "labelEn": "Waiting For Me",
+      "description": "Sender is waiting for reply, approval, confirmation, decision, or review.",
+      "priorityHint": "Usually P1 or P2"
+    },
+    {
+      "id": "followUp",
+      "labelZh": "需要跟进",
+      "labelEn": "Follow-up",
+      "description": "Useful thread that may need later tracking but not immediate action.",
+      "priorityHint": "Usually P2"
+    },
+    {
+      "id": "notice",
+      "labelZh": "普通通知",
+      "labelEn": "Notice",
+      "description": "Informational notice, newsletter, automatic update, or low-action system mail.",
+      "priorityHint": "Usually P3"
+    },
+    {
+      "id": "ignored",
+      "labelZh": "已忽略",
+      "labelEn": "Ignored",
+      "description": "Clearly irrelevant or already handled.",
+      "priorityHint": "Usually P3"
+    },
+    {
+      "id": "uncertain",
+      "labelZh": "不确定",
+      "labelEn": "Uncertain",
+      "description": "Not enough evidence to judge safely.",
+      "priorityHint": "Use when context is insufficient"
+    }
+  ],
+  "replyDraftInstruction": "Draft replies must stay in English. Leave draftReply empty when no reply is needed."
+}

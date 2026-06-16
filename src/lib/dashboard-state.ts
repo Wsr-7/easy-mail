@@ -19,7 +19,7 @@ const PRIORITY_ORDER: Record<string, number> = {
 };
 
 export interface DashboardCategory {
-  id: typeof CATEGORY_ORDER[number];
+  id: string;
   items: AnalysisResult["items"];
 }
 
@@ -34,14 +34,16 @@ export function buildDashboardState(
   config: Record<string, unknown>,
   digest: DigestData,
   analysis: AnalysisResult,
-  ignoredIds: string[]
+  ignoredIds: string[],
+  categoryOrder: readonly string[] = CATEGORY_ORDER
 ): DashboardState {
   const ignored = new Set(ignoredIds || []);
   const items = (analysis?.items || [])
     .filter((item) => !ignored.has(item.mailId))
     .sort(compareItems);
 
-  const categories = CATEGORY_ORDER.map((category) => ({
+  const dynamicCategories = unique([...categoryOrder, ...items.map((item) => item.category)]);
+  const categories = dynamicCategories.map((category) => ({
     id: category,
     items: items.filter((item) => item.category === category)
   }));
@@ -54,6 +56,10 @@ export function buildDashboardState(
   };
 }
 
+function unique(values: readonly string[]): string[] {
+  return [...new Set(values.filter(Boolean))];
+}
+
 function compareItems(a: AnalysisResult["items"][number], b: AnalysisResult["items"][number]): number {
   const byPriority = (PRIORITY_ORDER[a.priority] ?? 9) - (PRIORITY_ORDER[b.priority] ?? 9);
   if (byPriority !== 0) {
@@ -61,4 +67,3 @@ function compareItems(a: AnalysisResult["items"][number], b: AnalysisResult["ite
   }
   return String(b.receivedTime || "").localeCompare(String(a.receivedTime || ""));
 }
-

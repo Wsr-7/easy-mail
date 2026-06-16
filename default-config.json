@@ -8,5 +8,8 @@
   "bodyExcerptChars": 1200,
   "sampleMode": false,
   "modelFamily": "gpt-5.4",
-  "outputLanguage": "zh-CN"
+  "outputLanguage": "zh-CN",
+  "analysisBatchSize": 5,
+  "autoAnalyzeEnabled": true,
+  "autoAnalyzeMaxClassificationLevel": 2
 }

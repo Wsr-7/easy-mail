@@ -20,6 +20,7 @@
     "onCommand:emailAnalysis.pullMail",
     "onCommand:emailAnalysis.generateSampleDigest",
     "onCommand:emailAnalysis.analyze",
+    "onCommand:emailAnalysis.analyzeAllAllowed",
     "onView:emailAnalysis.dashboard"
   ],
   "main": "./out/extension.js",
@@ -65,7 +66,11 @@
       },
       {
         "command": "emailAnalysis.analyze",
-        "title": "Email Analysis: Analyze with Copilot"
+        "title": "Email Analysis: Analyze Next Batch with Copilot"
+      },
+      {
+        "command": "emailAnalysis.analyzeAllAllowed",
+        "title": "Email Analysis: Analyze All Allowed with Copilot"
       },
       {
         "command": "emailAnalysis.refreshDashboard",
@@ -82,12 +87,16 @@
       {
         "command": "emailAnalysis.openSettings",
         "title": "Email Analysis: Open Settings"
+      },
+      {
+        "command": "emailAnalysis.openPromptConfig",
+        "title": "Email Analysis: Open Prompt Config"
       }
     ]
   },
   "scripts": {
     "compile": "node scripts/clean-out.js && tsc -p .",
-    "test": "npm run compile && node --test out/test/digest.test.js out/test/analysis-schema.test.js out/test/summary.test.js out/test/dashboard-state.test.js",
+    "test": "npm run compile && node --test out/test/digest.test.js out/test/analysis-schema.test.js out/test/summary.test.js out/test/dashboard-state.test.js out/test/mail-store.test.js out/test/classification.test.js out/test/prompt-config.test.js",
     "package:vsix": "npm run compile && vsce package --out releases/email-analysis-poc-0.1.0.vsix",
     "validate:sample": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-sample-validation.ps1"
   },

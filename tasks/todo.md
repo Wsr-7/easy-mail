@@ -28,3 +28,15 @@
 - [x] 让 `outputLanguage` 同时控制 UI 语言
 - [x] 更新文档
 - [x] 运行验证并推送
+
+## 渐进式分析迭代
+
+- [x] 固化设计文档
+- [x] 新增 mail store 与稳定去重 id
+- [x] 新增 pending / blocked / analysed 队列状态
+- [x] 新增 batch / selected 分析入口
+- [x] 新增 classification gating 配置与默认分类器
+- [x] 新增 prompt 组合与自定义分类配置
+- [x] 更新 dashboard 控件和文档
+- [x] 增加测试并打包
+- [x] 提交并推送
