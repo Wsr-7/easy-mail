@@ -8,7 +8,7 @@ import { buildQueueState, classificationFor, ensureClassifications, normalizeCla
 import { buildSummaryMarkdown } from "./lib/summary";
 import { buildDashboardState, CATEGORY_ORDER, type DashboardState } from "./lib/dashboard-state";
 import { allowedCategoryIds, composeAnalysisPrompt, normalizePromptConfig, type PromptConfig } from "./lib/prompt-config";
-import { buildBatchDigestMarkdown, emptyMailStore, mergeDigestIntoStore, normalizeMailStore, type MailStore, type StoredMail } from "./lib/mail-store";
+import { buildBatchDigestMarkdown, emptyMailStore, mergeDigestIntoStore, normalizeMailStore, pruneMailStore, type MailStore, type StoredMail } from "./lib/mail-store";
 
 type Locale = "zh-CN" | "en-US";
 
@@ -19,7 +19,7 @@ type BusyState = {
 };
 
 type DashboardLabels = {
-  toolbar: Record<"pullMail" | "sample" | "analyze" | "analyzeSelected" | "analyzeAllAllowed" | "refresh" | "openDigest" | "openSummary" | "settingsFile" | "promptConfig", string>;
+  toolbar: Record<"pullMail" | "sample" | "analyze" | "analyzeSelected" | "analyzeAllAllowed" | "refresh" | "openDigest" | "openSummary" | "settingsFile" | "promptConfig" | "clearStore", string>;
   settings: {
     title: string;
     range: string;
@@ -33,6 +33,8 @@ type DashboardLabels = {
     batchSize: string;
     autoAnalyze: string;
     maxClassification: string;
+    retentionDays: string;
+    importantSenders: string;
     save: string;
     recentHoursOption: string;
     maxItemsOption: string;
@@ -60,7 +62,8 @@ const LABELS: Record<Locale, DashboardLabels> = {
       openDigest: "打开邮件摘要",
       openSummary: "打开分析总结",
       settingsFile: "配置文件",
-      promptConfig: "Prompt 分类配置"
+      promptConfig: "Prompt 分类配置",
+      clearStore: "清理本地缓存"
     },
     settings: {
       title: "设置",
@@ -75,6 +78,8 @@ const LABELS: Record<Locale, DashboardLabels> = {
       batchSize: "每批分析数量",
       autoAnalyze: "允许自动分析",
       maxClassification: "自动分析最高密级",
+      retentionDays: "本地缓存保留天数",
+      importantSenders: "重点发件人/邮件组（用 ; 分隔）",
       save: "保存设置",
       recentHoursOption: "最近小时数",
       maxItemsOption: "最多邮件数",
@@ -149,7 +154,8 @@ const LABELS: Record<Locale, DashboardLabels> = {
       openDigest: "Open Digest",
       openSummary: "Open Summary",
       settingsFile: "Settings File",
-      promptConfig: "Prompt Config"
+      promptConfig: "Prompt Config",
+      clearStore: "Clear Local Cache"
     },
     settings: {
       title: "Settings",
@@ -164,6 +170,8 @@ const LABELS: Record<Locale, DashboardLabels> = {
       batchSize: "Batch Size",
       autoAnalyze: "Allow Auto Analysis",
       maxClassification: "Max Auto Classification",
+      retentionDays: "Local Retention Days",
+      importantSenders: "Important senders/groups (; separated)",
       save: "Save Settings",
       recentHoursOption: "Recent Hours",
       maxItemsOption: "Max Items",
@@ -241,7 +249,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("emailAnalysis.openDigest", () => app.openDigest()),
     vscode.commands.registerCommand("emailAnalysis.openSummary", () => app.openSummary()),
     vscode.commands.registerCommand("emailAnalysis.openSettings", () => app.openSettings()),
-    vscode.commands.registerCommand("emailAnalysis.openPromptConfig", () => app.openPromptConfig())
+    vscode.commands.registerCommand("emailAnalysis.openPromptConfig", () => app.openPromptConfig()),
+    vscode.commands.registerCommand("emailAnalysis.clearLocalCache", () => app.clearLocalCache())
   );
 
   await app.initialize();
@@ -291,8 +300,9 @@ class EmailAnalysisApp {
     await runProcess("cscript.exe", args);
     const digest = parseDigest(await fs.promises.readFile(this.getDigestPath(), "utf8"));
     const merge = mergeDigestIntoStore(await this.readMailStore(), digest);
-    await this.writeMailStore(merge.store);
-    const classificationCache = ensureClassifications(merge.store.items, await this.readClassificationCache());
+    const prunedStore = pruneMailStore(merge.store, Number(config.mailRetentionDays || 30));
+    await this.writeMailStore(prunedStore);
+    const classificationCache = ensureClassifications(prunedStore.items, await this.readClassificationCache());
     await this.writeClassificationCache(classificationCache);
     await this.refresh();
     await vscode.window.showInformationMessage(`Email digest generated. Added ${merge.added}, skipped ${merge.skipped}.`);
@@ -352,6 +362,7 @@ class EmailAnalysisApp {
     }
 
     const promptConfig = await this.readPromptConfig();
+    promptConfig.importantSenders = mergeStringLists(promptConfig.importantSenders, parseFolders(config.importantSenders, []));
     const digestText = buildBatchDigestMarkdown(batch);
     const basePrompt = await fs.promises.readFile(path.join(this.context.extensionPath, "prompts", "base-system.md"), "utf8");
     const outputSchemaPrompt = await fs.promises.readFile(path.join(this.context.extensionPath, "prompts", "output-schema.md"), "utf8");
@@ -434,6 +445,14 @@ class EmailAnalysisApp {
 
   public async openPromptConfig(): Promise<void> {
     await openTextDocument(this.getPromptConfigPath());
+  }
+
+  public async clearLocalCache(): Promise<void> {
+    await this.writeMailStore(emptyMailStore());
+    await this.writeClassificationCache(normalizeClassificationCache({}));
+    await fs.promises.writeFile(this.getAnalysisPath(), `${JSON.stringify({ generatedAt: "", overview: { totalMails: 0, mustHandleToday: 0, risks: 0, waitingForMe: 0, notices: 0 }, items: [] }, null, 2)}\n`, "utf8");
+    await this.refresh();
+    await vscode.window.showInformationMessage("Local email cache cleared.");
   }
 
   private getDataDir(): string {
@@ -715,6 +734,11 @@ class EmailAnalysisApp {
       return;
     }
 
+    if (typed.type === "clearLocalCache") {
+      await this.clearLocalCache();
+      return;
+    }
+
     if (typed.type === "saveConfig") {
       await this.saveConfigFromMessage(typed);
       await this.refresh();
@@ -739,7 +763,9 @@ class EmailAnalysisApp {
       modelFamily: String(patch.modelFamily || current.modelFamily || "gpt-5.4").trim(),
       analysisBatchSize: positiveNumber(patch.analysisBatchSize, current.analysisBatchSize || 5),
       autoAnalyzeEnabled: patch.autoAnalyzeEnabled === true || patch.autoAnalyzeEnabled === "true",
-      autoAnalyzeMaxClassificationLevel: positiveNumber(patch.autoAnalyzeMaxClassificationLevel, current.autoAnalyzeMaxClassificationLevel || 2)
+      autoAnalyzeMaxClassificationLevel: positiveNumber(patch.autoAnalyzeMaxClassificationLevel, current.autoAnalyzeMaxClassificationLevel || 2),
+      mailRetentionDays: positiveNumber(patch.mailRetentionDays, current.mailRetentionDays || 30),
+      importantSenders: parseFolders(patch.importantSenders, current.importantSenders || [])
     };
     await this.writeConfig(next);
     await vscode.window.showInformationMessage("Email Analysis settings saved.");
@@ -759,6 +785,7 @@ class EmailAnalysisApp {
     const locale = getLocaleFromConfig(config);
     const labels = getLabels(locale);
     const promptConfig = extendedState.promptConfig || normalizePromptConfig({});
+    promptConfig.importantSenders = mergeStringLists(promptConfig.importantSenders, parseFolders(config.importantSenders, []));
     const categoryLabels = buildCategoryLabels(labels, promptConfig, locale);
     const rows = state.categories.map((entry) => renderCategory(entry.id, entry.items, labels, categoryLabels)).join("");
     const store = extendedState.store || emptyMailStore();
@@ -822,6 +849,7 @@ class EmailAnalysisApp {
     <button class="secondary" onclick="post('openSummary')">${escapeHtml(labels.toolbar.openSummary)}</button>
     <button class="ghost" onclick="post('openSettings')">${escapeHtml(labels.toolbar.settingsFile)}</button>
     <button class="ghost" onclick="post('openPromptConfig')">${escapeHtml(labels.toolbar.promptConfig)}</button>
+    <button class="ghost" onclick="post('clearLocalCache')">${escapeHtml(labels.toolbar.clearStore)}</button>
   </div>
   ${busyHtml}
   <details class="settings">
@@ -860,7 +888,13 @@ class EmailAnalysisApp {
         <input id="analysisBatchSize" type="number" min="1" value="${escapeAttr(String(config.analysisBatchSize || 5))}" />
       </label>
       <label>${escapeHtml(labels.settings.maxClassification)}
-        <input id="autoAnalyzeMaxClassificationLevel" type="number" min="0" max="4" value="${escapeAttr(String(config.autoAnalyzeMaxClassificationLevel || 2))}" />
+        <input id="autoAnalyzeMaxClassificationLevel" type="number" min="0" max="3" value="${escapeAttr(String(config.autoAnalyzeMaxClassificationLevel || 2))}" />
+      </label>
+      <label>${escapeHtml(labels.settings.retentionDays)}
+        <input id="mailRetentionDays" type="number" min="1" value="${escapeAttr(String(config.mailRetentionDays || 30))}" />
+      </label>
+      <label>${escapeHtml(labels.settings.importantSenders)}
+        <input id="importantSenders" value="${escapeAttr(Array.isArray(config.importantSenders) ? config.importantSenders.join(";") : "")}" />
       </label>
       <label>${escapeHtml(labels.settings.autoAnalyze)}
         <select id="autoAnalyzeEnabled">
@@ -910,7 +944,9 @@ class EmailAnalysisApp {
           modelFamily: document.getElementById('modelFamily').value,
           analysisBatchSize: document.getElementById('analysisBatchSize').value,
           autoAnalyzeEnabled: document.getElementById('autoAnalyzeEnabled').value,
-          autoAnalyzeMaxClassificationLevel: document.getElementById('autoAnalyzeMaxClassificationLevel').value
+          autoAnalyzeMaxClassificationLevel: document.getElementById('autoAnalyzeMaxClassificationLevel').value,
+          mailRetentionDays: document.getElementById('mailRetentionDays').value,
+          importantSenders: document.getElementById('importantSenders').value
         }
       });
     }
@@ -1114,6 +1150,10 @@ function parseFolders(value: unknown, fallback: string[]): string[] {
   }
   const parsed = String(value || "").split(";").map((item) => item.trim()).filter(Boolean);
   return parsed.length ? parsed : fallback;
+}
+
+function mergeStringLists(a: string[], b: string[]): string[] {
+  return [...new Set([...(a || []), ...(b || [])].map(String).map((item) => item.trim()).filter(Boolean))];
 }
 
 function formatModelInfo(modelInfo: Record<string, unknown>, labels: DashboardLabels): string {

@@ -49,19 +49,16 @@ export function ensureClassifications(storeItems: StoredMail[], cache: Classific
 
 export function classifyMail(mail: StoredMail): MailClassification {
   const text = `${mail.folder}\n${mail.subject}\n${mail.bodyExcerpt}`.toLowerCase();
-  if (text.includes("highly restricted") || text.includes("secret")) {
-    return buildClassification(mail.mailId, 4, "Highly Restricted", "keyword match");
+  if (text.includes("high registered") || text.includes("highly restricted") || text.includes("secret")) {
+    return buildClassification(mail.mailId, 3, "HIGH REGISTERED", "keyword match");
   }
-  if (text.includes("restricted")) {
-    return buildClassification(mail.mailId, 3, "Restricted", "keyword match");
-  }
-  if (text.includes("confidential") || text.includes("contract") || text.includes("budget")) {
-    return buildClassification(mail.mailId, 2, "Confidential", "keyword match");
+  if (text.includes("registered") || text.includes("restricted") || text.includes("confidential") || text.includes("contract") || text.includes("budget")) {
+    return buildClassification(mail.mailId, 2, "REGISTERED", "keyword match");
   }
   if (mail.from.toLowerCase().includes("@") || mail.folder.toLowerCase().includes("inbox")) {
-    return buildClassification(mail.mailId, 1, "Internal", "default mail classification");
+    return buildClassification(mail.mailId, 1, "INTERNAL", "default mail classification");
   }
-  return buildClassification(mail.mailId, 0, "Public", "default mail classification");
+  return buildClassification(mail.mailId, 0, "PUBLIC", "default mail classification");
 }
 
 export function buildQueueState(
@@ -111,7 +108,7 @@ function normalizeClassification(input: unknown): MailClassification | null {
   return {
     mailId,
     level: Number.isFinite(Number(input.level)) ? Number(input.level) : 1,
-    label: String(input.label || "Internal"),
+    label: String(input.label || "INTERNAL"),
     source: String(input.source || "default"),
     reason: String(input.reason || ""),
     updatedAt: String(input.updatedAt || "")

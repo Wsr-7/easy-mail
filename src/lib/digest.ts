@@ -8,6 +8,8 @@ export interface DigestMetadata {
 
 export interface DigestItem {
   mailId: string;
+  internetMessageId: string;
+  entryId: string;
   subject: string;
   from: string;
   receivedTime: string;
@@ -66,6 +68,8 @@ function parseMailSection(section: string): DigestItem | null {
 
   const result: DigestItem = {
     mailId: lines[0],
+    internetMessageId: "",
+    entryId: "",
     subject: "",
     from: "",
     receivedTime: "",
@@ -79,6 +83,8 @@ function parseMailSection(section: string): DigestItem | null {
 
   for (const line of lines.slice(1)) {
     assignIfPrefix(result, line, "Subject: ", "subject");
+    assignIfPrefix(result, line, "InternetMessageId: ", "internetMessageId");
+    assignIfPrefix(result, line, "EntryId: ", "entryId");
     assignIfPrefix(result, line, "From: ", "from");
     assignIfPrefix(result, line, "ReceivedTime: ", "receivedTime");
     assignIfPrefix(result, line, "Folder: ", "folder");
@@ -96,4 +102,3 @@ function assignIfPrefix(target: DigestItem, line: string, prefix: string, key: k
     target[key] = line.slice(prefix.length).trim() as never;
   }
 }
-

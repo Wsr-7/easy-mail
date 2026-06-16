@@ -11,5 +11,7 @@
   "outputLanguage": "zh-CN",
   "analysisBatchSize": 5,
   "autoAnalyzeEnabled": true,
-  "autoAnalyzeMaxClassificationLevel": 2
+  "autoAnalyzeMaxClassificationLevel": 2,
+  "mailRetentionDays": 30,
+  "importantSenders": []
 }

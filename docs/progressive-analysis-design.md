@@ -20,13 +20,23 @@ The extension keeps the existing `mail-digest.md` for compatibility, then import
 - `data/classification-cache.json`: local classification per mail.
 - `data/prompt-config.json`: user-customisable category and prompt configuration.
 
-Each pulled mail gets a stable id computed from source fields when Outlook does not expose a stable id in the digest:
+Each pulled mail gets a stable id from Outlook-native fields first:
 
 ```text
-sha256(folder + receivedTime + from + subject + bodyExcerpt)
+1. InternetMessageID
+2. EntryID
+3. sha256(folder + receivedTime + from + subject + bodyExcerpt) fallback
 ```
 
-This is good enough for the current VBS output and can later be replaced by `InternetMessageID` / `EntryID` when the collector exports them.
+The hash fallback is only used when Outlook does not expose either native id.
+
+`mail-store.json` is a local JSON document, not SQLite. The current POC keeps this format because it is easy to inspect, easy to delete, and sufficient for a personal local cache. SQLite should be considered later if mailbox volume becomes large enough to require indexed queries.
+
+Retention policy:
+
+- `mailRetentionDays` prunes old local store items after pull.
+- `Clear Local Cache` deletes the local store, classification cache, and analysis result.
+- Original Outlook mail is never deleted by this tool.
 
 ## Workflow
 
@@ -47,11 +57,10 @@ The first implementation supports deterministic default classification plus a fu
 
 Default classification levels:
 
-- `0` Public
-- `1` Internal
-- `2` Confidential
-- `3` Restricted
-- `4` Highly Restricted
+- `0` PUBLIC
+- `1` INTERNAL
+- `2` REGISTERED
+- `3` HIGH REGISTERED
 
 The dashboard shows:
 
@@ -73,6 +82,8 @@ The extension composes Copilot prompts from:
 - current batch mail content
 
 Users can edit the copied `prompt-config.json` in global storage to add or change categories. The extension validates only that categories have an `id`; unknown category ids from the model are normalised to `uncertain`.
+
+The default category list includes `importantSender`. The dashboard setting `importantSenders` and `prompt-config.json` can list watched senders, managers, executives, or mail groups. The composed prompt instructs Copilot to prefer `importantSender` when sender, recipient group, subject, or body contains those values.
 
 ## Dashboard
 

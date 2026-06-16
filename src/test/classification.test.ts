@@ -7,6 +7,8 @@ const mails: StoredMail[] = [
   {
     mailId: "mail-1",
     sourceMailId: "mail-001",
+    internetMessageId: "",
+    entryId: "",
     subject: "Public update",
     from: "A <a@example.com>",
     receivedTime: "2026-06-16 09:00:00",
@@ -21,7 +23,9 @@ const mails: StoredMail[] = [
   {
     mailId: "mail-2",
     sourceMailId: "mail-002",
-    subject: "Restricted plan",
+    internetMessageId: "",
+    entryId: "",
+    subject: "High registered plan",
     from: "B <b@example.com>",
     receivedTime: "2026-06-16 08:00:00",
     folder: "Inbox",
@@ -29,7 +33,7 @@ const mails: StoredMail[] = [
     importance: "high",
     toMe: "true",
     ccMe: "false",
-    bodyExcerpt: "This is restricted.",
+    bodyExcerpt: "This is high registered.",
     pulledAt: ""
   }
 ];

@@ -1,6 +1,13 @@
 {
   "categories": [
     {
+      "id": "importantSender",
+      "labelZh": "重点发件人/邮件组",
+      "labelEn": "Important Sender or Group",
+      "description": "Mail from or containing configured important senders, managers, executives, or watched mail groups.",
+      "priorityHint": "Usually P0 or P1 unless it is clearly a notice"
+    },
+    {
       "id": "mustHandleToday",
       "labelZh": "今天必须处理",
       "labelEn": "Must Handle Today",
@@ -50,5 +57,6 @@
       "priorityHint": "Use when context is insufficient"
     }
   ],
-  "replyDraftInstruction": "Draft replies must stay in English. Leave draftReply empty when no reply is needed."
+  "replyDraftInstruction": "Draft replies must stay in English. Leave draftReply empty when no reply is needed.",
+  "importantSenders": []
 }

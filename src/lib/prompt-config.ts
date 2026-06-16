@@ -9,10 +9,18 @@ export interface PromptCategory {
 export interface PromptConfig {
   categories: PromptCategory[];
   replyDraftInstruction: string;
+  importantSenders: string[];
 }
 
 export const DEFAULT_PROMPT_CONFIG: PromptConfig = {
   categories: [
+    {
+      id: "importantSender",
+      labelZh: "重点发件人/邮件组",
+      labelEn: "Important Sender or Group",
+      description: "Mail from or containing configured important senders, managers, executives, or watched mail groups.",
+      priorityHint: "Usually P0 or P1 unless it is clearly a notice"
+    },
     {
       id: "mustHandleToday",
       labelZh: "今天必须处理",
@@ -63,7 +71,8 @@ export const DEFAULT_PROMPT_CONFIG: PromptConfig = {
       priorityHint: "Use when context is insufficient"
     }
   ],
-  replyDraftInstruction: "Draft replies must stay in English. Leave draftReply empty when no reply is needed."
+  replyDraftInstruction: "Draft replies must stay in English. Leave draftReply empty when no reply is needed.",
+  importantSenders: []
 };
 
 export function normalizePromptConfig(input: unknown): PromptConfig {
@@ -73,7 +82,8 @@ export function normalizePromptConfig(input: unknown): PromptConfig {
     : DEFAULT_PROMPT_CONFIG.categories;
   return {
     categories: categories.length ? categories : DEFAULT_PROMPT_CONFIG.categories,
-    replyDraftInstruction: String(base.replyDraftInstruction || DEFAULT_PROMPT_CONFIG.replyDraftInstruction)
+    replyDraftInstruction: String(base.replyDraftInstruction || DEFAULT_PROMPT_CONFIG.replyDraftInstruction),
+    importantSenders: parseStringList(base.importantSenders)
   };
 }
 
@@ -95,6 +105,8 @@ export function composeAnalysisPrompt(input: {
     input.basePrompt.trim(),
     "Allowed categories:",
     renderCategories(input.promptConfig.categories),
+    "Important sender/group rules:",
+    renderImportantSenders(input.promptConfig.importantSenders),
     "Reply draft instruction:",
     input.promptConfig.replyDraftInstruction,
     input.outputSchemaPrompt.trim(),
@@ -102,6 +114,16 @@ export function composeAnalysisPrompt(input: {
     languageInstruction,
     input.digestText
   ].filter(Boolean).join("\n\n");
+}
+
+function renderImportantSenders(importantSenders: string[]): string {
+  if (!importantSenders.length) {
+    return "- No configured important senders or groups.";
+  }
+  return [
+    "If a mail sender, recipient group, subject, or body contains any of these values, prefer category `importantSender` unless a more urgent category is clearly better:",
+    ...importantSenders.map((item) => `- ${item}`)
+  ].join("\n");
 }
 
 function renderCategories(categories: PromptCategory[]): string {
@@ -130,4 +152,11 @@ function normalizeCategory(input: unknown): PromptCategory | null {
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object";
+}
+
+function parseStringList(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map(String).map((item) => item.trim()).filter(Boolean);
+  }
+  return String(value || "").split(";").map((item) => item.trim()).filter(Boolean);
 }

@@ -4,6 +4,8 @@ import type { DigestData, DigestItem } from "./digest";
 export interface StoredMail {
   mailId: string;
   sourceMailId: string;
+  internetMessageId: string;
+  entryId: string;
   subject: string;
   from: string;
   receivedTime: string;
@@ -80,6 +82,8 @@ export function digestItemToStoredMail(item: DigestItem, pulledAt: string): Stor
   return {
     mailId: stableMailId(item),
     sourceMailId: item.mailId,
+    internetMessageId: item.internetMessageId,
+    entryId: item.entryId,
     subject: item.subject,
     from: item.from,
     receivedTime: item.receivedTime,
@@ -94,6 +98,12 @@ export function digestItemToStoredMail(item: DigestItem, pulledAt: string): Stor
 }
 
 export function stableMailId(item: DigestItem): string {
+  if (item.internetMessageId.trim()) {
+    return `internet:${item.internetMessageId.trim()}`;
+  }
+  if (item.entryId.trim()) {
+    return `entry:${item.entryId.trim()}`;
+  }
   const source = [
     item.folder,
     item.receivedTime,
@@ -102,6 +112,20 @@ export function stableMailId(item: DigestItem): string {
     item.bodyExcerpt
   ].join("\n");
   return `mail-${crypto.createHash("sha256").update(source).digest("hex").slice(0, 16)}`;
+}
+
+export function pruneMailStore(store: MailStore, retentionDays: number, now: Date = new Date()): MailStore {
+  if (!Number.isFinite(retentionDays) || retentionDays <= 0) {
+    return store;
+  }
+  const cutoff = now.getTime() - retentionDays * 24 * 60 * 60 * 1000;
+  return {
+    ...store,
+    items: store.items.filter((item) => {
+      const received = Date.parse(String(item.receivedTime || "").replace(" ", "T"));
+      return !Number.isFinite(received) || received >= cutoff;
+    })
+  };
 }
 
 export function buildBatchDigestMarkdown(items: StoredMail[]): string {
@@ -150,6 +174,8 @@ function normalizeStoredMail(input: unknown): StoredMail | null {
   return {
     mailId,
     sourceMailId: String(input.sourceMailId || ""),
+    internetMessageId: String(input.internetMessageId || ""),
+    entryId: String(input.entryId || ""),
     subject: String(input.subject || ""),
     from: String(input.from || ""),
     receivedTime: String(input.receivedTime || ""),

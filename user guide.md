@@ -36,7 +36,9 @@
 
 ## 渐进式分析
 
-`Pull Mail` 只负责拉取邮件并导入本地 `mail-store.json`。插件会根据邮件的文件夹、时间、发件人、标题和正文摘要生成稳定 ID，已经拉过的邮件会跳过。
+`Pull Mail` 只负责拉取邮件并导入本地 `mail-store.json`。插件优先使用 Outlook 的 `InternetMessageId`，其次使用 `EntryId` 去重；只有两者都拿不到时，才根据邮件的文件夹、时间、发件人、标题和正文摘要生成兜底 ID。已经拉过的邮件会跳过。
+
+`mail-store.json` 是本地 JSON 文件，不是 SQLite。当前 POC 选择 JSON 是为了方便审计和删除；如果后续要长期保存大量邮件，再切换到 SQLite 更合适。
 
 拉取后，邮件会先进入 `未分析邮件` 面板。分析入口有三种：
 
@@ -88,6 +90,8 @@ email-analysis.config.json
 - `analysisBatchSize`
 - `autoAnalyzeEnabled`
 - `autoAnalyzeMaxClassificationLevel`
+- `mailRetentionDays`
+- `importantSenders`
 
 `rangeMode` 可选值：
 
@@ -124,11 +128,14 @@ AI 分析默认优先请求 `gpt-5.4`。如果当前 VS Code / Copilot 运行时
 
 - `0` Public
 - `1` Internal
-- `2` Confidential
-- `3` Restricted
-- `4` Highly Restricted
+- `2` Registered
+- `3` High Registered
 
 高于这个值的邮件不会自动送给 Copilot，只能由用户手动勾选确认后分析。
+
+`mailRetentionDays` 表示本地 `mail-store.json` 缓存保留多少天。每次 `Pull Mail` 后会自动裁剪过旧记录。看板中的 `Clear Local Cache` 会清空本地缓存、classification cache 和 analysis result，但不会删除 Outlook 里的原始邮件。
+
+`importantSenders` 可配置重点发件人、老板、邮件组或关键字，用 `;` 分隔。分析时如果发件人、收件组、标题或正文包含这些值，Copilot 会优先考虑 `importantSender` 分类。
 
 设置面板默认折叠，点击 `设置` / `Settings` 后才会展开。分类面板也默认可折叠，`今天必须处理` / `Must Handle Today` 默认展开，其它分类可以按需展开。
 
@@ -149,6 +156,18 @@ prompt-config.json
   "labelEn": "VIP Customer",
   "description": "Important customer mail that needs extra attention.",
   "priorityHint": "Usually P0 or P1"
+}
+```
+
+默认已经包含一个 `importantSender` 分类：
+
+```json
+{
+  "id": "importantSender",
+  "labelZh": "重点发件人/邮件组",
+  "labelEn": "Important Sender or Group",
+  "description": "Mail from or containing configured important senders, managers, executives, or watched mail groups.",
+  "priorityHint": "Usually P0 or P1 unless it is clearly a notice"
 }
 ```
 

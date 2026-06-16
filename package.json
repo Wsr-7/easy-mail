@@ -21,6 +21,7 @@
     "onCommand:emailAnalysis.generateSampleDigest",
     "onCommand:emailAnalysis.analyze",
     "onCommand:emailAnalysis.analyzeAllAllowed",
+    "onCommand:emailAnalysis.clearLocalCache",
     "onView:emailAnalysis.dashboard"
   ],
   "main": "./out/extension.js",
@@ -91,6 +92,10 @@
       {
         "command": "emailAnalysis.openPromptConfig",
         "title": "Email Analysis: Open Prompt Config"
+      },
+      {
+        "command": "emailAnalysis.clearLocalCache",
+        "title": "Email Analysis: Clear Local Cache"
       }
     ]
   },

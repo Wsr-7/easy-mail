@@ -30,10 +30,13 @@ releases/    打包生成的带版本号 VSIX
 - 支持 `GitHub Copilot` 模型分析，默认优先请求 `gpt-5.4`，不可用时使用 VS Code 当前可用的 Copilot 模型
 - 支持在看板中配置拉取参数、界面/分析语言和模型 family
 - 支持 Pull / Analyze 任务进度提示，避免长任务无反馈
-- 支持渐进式分析：拉取后进入本地 mail store，按批次或选中邮件分析
+- 支持渐进式分析：拉取后进入本地 JSON mail store，按批次或选中邮件分析
+- 支持优先用 `InternetMessageId` / `EntryId` 去重，缺失时才使用 hash 兜底
 - 支持未分析、已分析、需手动确认统计和面板
-- 支持 classification gating：超过配置密级的邮件不会自动送 Copilot
+- 支持本地缓存保留天数和手动清理本地缓存
+- 支持 classification gating：超过配置密级的邮件不会自动送 Copilot，密级为 `PUBLIC` / `INTERNAL` / `REGISTERED` / `HIGH REGISTERED`
 - 支持自定义分类 prompt，程序会组合 prompt 后分析邮件
+- 支持重点发件人/邮件组分类 `importantSender`
 - 支持可折叠分类面板
 - 生成：
   - `mail-digest.md`

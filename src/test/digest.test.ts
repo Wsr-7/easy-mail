@@ -18,6 +18,8 @@ Folders:
 ## Mail: mail-001
 
 Subject: Contract approval needed
+InternetMessageId: <mail-001@example.com>
+EntryId: entry-001
 From: Alice <alice@example.com>
 ReceivedTime: 2026-06-16 09:12:00
 Folder: Inbox/Customer
@@ -35,6 +37,7 @@ Please review and approve the contract.
   assert.deepEqual(result.metadata.folders, ["Inbox", "Inbox/Customer"]);
   assert.equal(result.items.length, 1);
   assert.equal(result.items[0].mailId, "mail-001");
+  assert.equal(result.items[0].internetMessageId, "<mail-001@example.com>");
+  assert.equal(result.items[0].entryId, "entry-001");
   assert.equal(result.items[0].subject, "Contract approval needed");
 });
-

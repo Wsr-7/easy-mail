@@ -194,6 +194,8 @@ Function BuildMailRecord(byRef mail, byVal folderPath, byVal bodyChars, byVal re
   Set record = CreateObject("Scripting.Dictionary")
   record.CompareMode = 1
   record.Add "mailId", "mail-" & Right("000" & CStr(recordIndex), 3)
+  record.Add "internetMessageId", SafeInternetMessageId(mail)
+  record.Add "entryId", SafeString(mail.EntryID)
   record.Add "subject", SafeString(mail.Subject)
   record.Add "senderName", SafeString(mail.SenderName)
   record.Add "senderEmail", SafeSenderEmail(mail)
@@ -206,6 +208,18 @@ Function BuildMailRecord(byRef mail, byVal folderPath, byVal bodyChars, byVal re
   record.Add "ccMe", LCase(CStr(IsCcRecipient(mail)))
   record.Add "bodyExcerpt", TruncateText(SafeString(mail.Body), bodyChars)
   Set BuildMailRecord = record
+End Function
+
+Function SafeInternetMessageId(byRef mail)
+  On Error Resume Next
+  Dim accessor
+  Set accessor = mail.PropertyAccessor
+  SafeInternetMessageId = SafeString(accessor.GetProperty("http://schemas.microsoft.com/mapi/proptag/0x1035001E"))
+  If Err.Number <> 0 Then
+    Err.Clear
+    SafeInternetMessageId = ""
+  End If
+  On Error GoTo 0
 End Function
 
 Function SafeSenderEmail(byRef mail)
@@ -312,6 +326,8 @@ Sub WriteDigest(byVal outputPath, byRef target, byRef records, byVal recordCount
     Set record = records(index)
     content = content & vbCrLf
     content = content & "## Mail: " & record("mailId") & vbCrLf & vbCrLf
+    content = content & "InternetMessageId: " & EscapeMarkdownInline(record("internetMessageId")) & vbCrLf
+    content = content & "EntryId: " & EscapeMarkdownInline(record("entryId")) & vbCrLf
     content = content & "Subject: " & EscapeMarkdownInline(record("subject")) & vbCrLf
     content = content & "From: " & EscapeMarkdownInline(record("senderName")) & " <" & EscapeMarkdownInline(record("senderEmail")) & ">" & vbCrLf
     content = content & "ReceivedTime: " & record("receivedTime") & vbCrLf
@@ -351,6 +367,8 @@ Function BuildSampleRecord(byVal recordIndex, byVal subject, byVal senderName, b
   Set record = CreateObject("Scripting.Dictionary")
   record.CompareMode = 1
   record.Add "mailId", "mail-" & Right("000" & CStr(recordIndex), 3)
+  record.Add "internetMessageId", "<sample-" & CStr(recordIndex) & "@email-analysis.local>"
+  record.Add "entryId", "sample-entry-" & CStr(recordIndex)
   record.Add "subject", subject
   record.Add "senderName", senderName
   record.Add "senderEmail", senderEmail
