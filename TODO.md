@@ -29,3 +29,5 @@
 ## 当前阻塞
 
 - `gh auth status` 显示 `Wsr-7` 当前 token invalid，需要重新认证或让当前 Codex 进程可见有效 `GH_TOKEN` / `GITHUB_TOKEN`。
+- 当前进程、Windows 用户级环境变量、机器级环境变量均未发现 `GH_TOKEN` / `GITHUB_TOKEN`。
+- 已尝试 `gh auth login` 和 `gh auth refresh`，两次都在交互授权阶段超时，尚未完成认证。
