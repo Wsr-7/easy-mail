@@ -6,7 +6,6 @@ import { parseDigest, type DigestData } from "./lib/digest";
 import { normalizeAnalysis, parseAnalysisJson, type AnalysisResult } from "./lib/analysis-schema";
 import { buildSummaryMarkdown } from "./lib/summary";
 import { buildDashboardState, CATEGORY_ORDER, type DashboardState } from "./lib/dashboard-state";
-import { pickModels } from "./lib/model-selection";
 
 const CATEGORY_TITLES: Record<string, string> = {
   mustHandleToday: "Must Handle Today",
@@ -79,35 +78,23 @@ class EmailAnalysisApp {
     const config = await this.readConfig();
     const digestText = await fs.promises.readFile(this.getDigestPath(), "utf8");
     const promptTemplate = await fs.promises.readFile(path.join(this.context.extensionPath, "prompts", "analysis-prompt.md"), "utf8");
-    const models = await vscode.lm.selectChatModels({ vendor: "copilot" });
-    const preferredFamilies = Array.isArray(config.preferredModelFamilies) ? config.preferredModelFamilies : ["gpt-5.5", "gpt-5.4"];
-    const orderedModels = pickModels(models, preferredFamilies);
-    if (!orderedModels.length) {
+    const configuredFamily = typeof config.modelFamily === "string" ? config.modelFamily.trim() : "gpt-5.4";
+    const preferredModels = configuredFamily
+      ? await vscode.lm.selectChatModels({ vendor: "copilot", family: configuredFamily })
+      : [];
+    const models = preferredModels.length ? preferredModels : await vscode.lm.selectChatModels({ vendor: "copilot" });
+    if (!models.length) {
       throw new Error("No GitHub Copilot model is available in this VS Code session.");
     }
 
     const prompt = `${promptTemplate}\n\n${digestText}`;
-    let analysis: AnalysisResult | null = null;
-    let lastError: unknown = null;
-
-    for (const model of orderedModels) {
-      try {
-        const response = await model.sendRequest(
-          [vscode.LanguageModelChatMessage.User(prompt)],
-          {},
-          new vscode.CancellationTokenSource().token
-        );
-        const raw = await readResponseText(response.text);
-        analysis = parseAnalysisJson(raw);
-        break;
-      } catch (error) {
-        lastError = error;
-      }
-    }
-
-    if (!analysis) {
-      throw lastError instanceof Error ? lastError : new Error("Failed to analyze digest.");
-    }
+    const response = await models[0].sendRequest(
+      [vscode.LanguageModelChatMessage.User(prompt)],
+      {},
+      new vscode.CancellationTokenSource().token
+    );
+    const raw = await readResponseText(response.text);
+    const analysis = parseAnalysisJson(raw);
 
     const normalized = normalizeAnalysis(analysis);
     await fs.promises.writeFile(this.getAnalysisPath(), JSON.stringify(normalized, null, 2), "utf8");

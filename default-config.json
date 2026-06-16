@@ -7,8 +7,5 @@
   ],
   "bodyExcerptChars": 1200,
   "sampleMode": false,
-  "preferredModelFamilies": [
-    "gpt-5.5",
-    "gpt-5.4"
-  ]
+  "modelFamily": "gpt-5.4"
 }

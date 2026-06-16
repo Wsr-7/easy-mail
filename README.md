@@ -27,8 +27,7 @@ releases/    打包生成的带版本号 VSIX
 - 支持 `最近 N 封` 与 `最近 N 小时`
 - 支持 `指定一个或多个 Outlook 文件夹`
 - 支持 `sample mode`，无 Outlook 也能演示
-- 支持 `GitHub Copilot` 模型分析
-- 模型优先级支持 `5.5 -> 5.4` 回退顺序
+- 支持 `GitHub Copilot` 模型分析，默认优先请求 `gpt-5.4`，不可用时使用 VS Code 当前可用的 Copilot 模型
 - 生成：
   - `mail-digest.md`
   - `analysis-result.json`

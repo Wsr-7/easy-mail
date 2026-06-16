@@ -49,15 +49,17 @@ email-analysis.config.json
 - `folders`
 - `bodyExcerptChars`
 - `sampleMode`
-- `preferredModelFamilies`
+- `modelFamily`
 
 `rangeMode` 可选值：
 
 - `recentHours`
 - `maxItems`
 
-默认模型回退顺序：
+AI 分析默认优先请求 `gpt-5.4`。如果当前 VS Code / Copilot 运行时没有暴露这个模型族，插件会使用当前可用的 Copilot 模型。
+
+如果需要改默认模型，可以在配置文件中调整：
 
 ```json
-["gpt-5.5", "gpt-5.4"]
+"modelFamily": "gpt-5.4"
 ```

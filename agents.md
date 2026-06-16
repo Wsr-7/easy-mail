@@ -10,7 +10,7 @@
 - 仅支持 `Windows`
 - 默认只读，不写回 Outlook
 - 默认通过 `GitHub Copilot` 做 AI 分析
-- 优先模型顺序：`5.5 -> 5.4`
+- 默认优先请求 `gpt-5.4`，不可用时使用当前可用的 Copilot 模型
 
 ## 实现要求
 
@@ -18,4 +18,3 @@
 - `scripts/` 中放 Windows 执行脚本和 VBS 采集器
 - `prompts/` 中放 AI 提示词
 - `releases/` 中放带版本号的 VSIX 包
-

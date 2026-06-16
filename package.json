@@ -86,7 +86,7 @@
     ]
   },
   "scripts": {
-    "compile": "tsc -p .",
+    "compile": "node scripts/clean-out.js && tsc -p .",
     "test": "npm run compile && node --test out/test/digest.test.js out/test/analysis-schema.test.js out/test/summary.test.js out/test/dashboard-state.test.js",
     "package:vsix": "npm run compile && vsce package --out releases/email-analysis-poc-0.1.0.vsix",
     "validate:sample": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-sample-validation.ps1"
