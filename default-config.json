@@ -5,10 +5,10 @@
   "folders": [
     "Inbox"
   ],
-  "bodyExcerptChars": 1200,
+  "bodyExcerptChars": 1500,
   "sampleMode": false,
   "modelFamily": "gpt-5.4",
-  "outputLanguage": "zh-CN",
+  "outputLanguage": "en-US",
   "analysisBatchSize": 5,
   "autoAnalyzeEnabled": true,
   "autoAnalyzeMaxClassificationLevel": 2,

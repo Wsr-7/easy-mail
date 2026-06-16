@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { emptyMailIndex, emptyMailStore, mergeDigestIntoIndex, mergeDigestIntoStore, pruneMailIndex, pruneMailStore } from "../lib/mail-store";
+import { emptyMailIndex, emptyMailStore, folderOldestReceivedTimes, mergeDigestIntoIndex, mergeDigestIntoStore, pruneMailIndex, pruneMailStore } from "../lib/mail-store";
 
 test("mergeDigestIntoStore adds new mail and skips duplicates by stable id", () => {
   const digest = {
@@ -58,6 +58,62 @@ test("mergeDigestIntoStore skips ids already present in mail index", () => {
   assert.equal(merge.skipped, 1);
 });
 
+test("mergeDigestIntoIndex records oldest received time per folder", () => {
+  const digest = {
+    metadata: { generatedAt: "2026-06-16 10:00:00", rangeMode: "recentHours", recentHours: 24, maxItems: 3, folders: ["Inbox", "Inbox/Project"] },
+    items: [
+      {
+        mailId: "mail-001",
+        internetMessageId: "<mail-001@example.com>",
+        entryId: "entry-001",
+        subject: "Newest",
+        from: "Alice <alice@example.com>",
+        receivedTime: "2026-06-16 09:00:00",
+        folder: "Inbox",
+        unread: "true",
+        importance: "normal",
+        toMe: "true",
+        ccMe: "false",
+        bodyExcerpt: ""
+      },
+      {
+        mailId: "mail-002",
+        internetMessageId: "<mail-002@example.com>",
+        entryId: "entry-002",
+        subject: "Oldest",
+        from: "Bob <bob@example.com>",
+        receivedTime: "2026-06-15 09:00:00",
+        folder: "Inbox",
+        unread: "true",
+        importance: "normal",
+        toMe: "true",
+        ccMe: "false",
+        bodyExcerpt: ""
+      },
+      {
+        mailId: "mail-003",
+        internetMessageId: "<mail-003@example.com>",
+        entryId: "entry-003",
+        subject: "Project",
+        from: "Carol <carol@example.com>",
+        receivedTime: "2026-06-14 09:00:00",
+        folder: "Inbox/Project",
+        unread: "false",
+        importance: "normal",
+        toMe: "true",
+        ccMe: "false",
+        bodyExcerpt: ""
+      }
+    ]
+  };
+
+  const index = mergeDigestIntoIndex(emptyMailIndex(), digest);
+  assert.deepEqual(folderOldestReceivedTimes(index, ["Inbox", "Inbox/Project"]), {
+    Inbox: "2026-06-15 09:00:00",
+    "Inbox/Project": "2026-06-14 09:00:00"
+  });
+});
+
 test("pruneMailStore removes items older than retention days", () => {
   const store = {
     generatedAt: "",
@@ -77,7 +133,7 @@ test("pruneMailStore removes items older than retention days", () => {
         toMe: "true",
         ccMe: "false",
         bodyExcerpt: "",
-        pulledAt: ""
+        pulledAt: "2026-05-01T09:00:00"
       },
       {
         mailId: "mail-new",
@@ -93,7 +149,7 @@ test("pruneMailStore removes items older than retention days", () => {
         toMe: "true",
         ccMe: "false",
         bodyExcerpt: "",
-        pulledAt: ""
+        pulledAt: "2026-06-15T09:00:00"
       }
     ]
   };
@@ -102,10 +158,39 @@ test("pruneMailStore removes items older than retention days", () => {
   assert.deepEqual(pruned.items.map((item) => item.mailId), ["mail-new"]);
 });
 
+test("pruneMailStore uses pulledAt before receivedTime", () => {
+  const store = {
+    generatedAt: "",
+    lastPullAt: "",
+    items: [
+      {
+        mailId: "historical-but-newly-pulled",
+        sourceMailId: "mail-history",
+        internetMessageId: "",
+        entryId: "",
+        subject: "",
+        from: "",
+        receivedTime: "2026-05-01 09:00:00",
+        folder: "Inbox",
+        unread: "false",
+        importance: "normal",
+        toMe: "true",
+        ccMe: "false",
+        bodyExcerpt: "",
+        pulledAt: "2026-06-16T09:00:00"
+      }
+    ]
+  };
+
+  const pruned = pruneMailStore(store, 1, new Date("2026-06-16T12:00:00"));
+  assert.equal(pruned.items.length, 1);
+});
+
 test("pruneMailIndex removes anchors older than retention days", () => {
   const index = {
     generatedAt: "",
     lastPullAt: "",
+    folderAnchors: {},
     items: [
       {
         mailId: "old",
@@ -114,7 +199,7 @@ test("pruneMailIndex removes anchors older than retention days", () => {
         entryId: "",
         receivedTime: "2026-06-01 09:00:00",
         folder: "Inbox",
-        lastSeenAt: ""
+        lastSeenAt: "2026-06-01T09:00:00"
       },
       {
         mailId: "new",
@@ -123,10 +208,31 @@ test("pruneMailIndex removes anchors older than retention days", () => {
         entryId: "",
         receivedTime: "2026-06-15 09:00:00",
         folder: "Inbox",
-        lastSeenAt: ""
+        lastSeenAt: "2026-06-15T09:00:00"
       }
     ]
   };
   const pruned = pruneMailIndex(index, 7, new Date("2026-06-16T00:00:00"));
   assert.deepEqual(pruned.items.map((item) => item.mailId), ["new"]);
+});
+
+test("pruneMailIndex uses lastSeenAt before receivedTime", () => {
+  const index = {
+    generatedAt: "",
+    lastPullAt: "",
+    folderAnchors: {},
+    items: [
+      {
+        mailId: "historical-anchor",
+        sourceMailId: "historical-anchor",
+        internetMessageId: "",
+        entryId: "",
+        receivedTime: "2026-05-01 09:00:00",
+        folder: "Inbox",
+        lastSeenAt: "2026-06-16T09:00:00"
+      }
+    ]
+  };
+  const pruned = pruneMailIndex(index, 1, new Date("2026-06-16T12:00:00"));
+  assert.equal(pruned.items.length, 1);
 });

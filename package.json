@@ -18,6 +18,7 @@
   "activationEvents": [
     "onStartupFinished",
     "onCommand:emailAnalysis.pullMail",
+    "onCommand:emailAnalysis.loadMore",
     "onCommand:emailAnalysis.generateSampleDigest",
     "onCommand:emailAnalysis.analyze",
     "onCommand:emailAnalysis.analyzeAllAllowed",
@@ -38,6 +39,167 @@
     "default-config.json"
   ],
   "contributes": {
+    "configuration": {
+      "title": "Email Analysis",
+      "properties": {
+        "emailAnalysis.rangeMode": {
+          "type": "string",
+          "order": 1,
+          "enum": [
+            "recentHours",
+            "maxItems"
+          ],
+          "enumItemLabels": [
+            "Recent Hours",
+            "Max Items"
+          ],
+          "default": "recentHours",
+          "description": "Mail pull range mode."
+        },
+        "emailAnalysis.recentHours": {
+          "type": "number",
+          "order": 2,
+          "default": 24,
+          "minimum": 1,
+          "description": "Pull mails received within the last N hours."
+        },
+        "emailAnalysis.maxItems": {
+          "type": "number",
+          "order": 3,
+          "default": 50,
+          "minimum": 1,
+          "description": "Maximum number of mails to pull."
+        },
+        "emailAnalysis.folders": {
+          "type": "array",
+          "order": 4,
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "Inbox"
+          ],
+          "description": "Outlook folders to scan."
+        },
+        "emailAnalysis.bodyExcerptChars": {
+          "type": "number",
+          "order": 8,
+          "default": 1500,
+          "minimum": 100,
+          "description": "Maximum body characters per mail sent to Copilot."
+        },
+        "emailAnalysis.sampleMode": {
+          "type": "boolean",
+          "order": 14,
+          "default": false,
+          "description": "Generate sample mail data instead of reading Outlook."
+        },
+        "emailAnalysis.modelFamily": {
+          "type": "string",
+          "order": 6,
+          "enum": [
+            "gpt-5.4",
+            "gpt-5-mini",
+            "gpt-4o-mini",
+            "claude-haiku-4.5",
+            "copilot-utility",
+            "copilot-utility-small",
+            "oswe-vscode",
+            "oswe-vscode-modelD"
+          ],
+          "enumItemLabels": [
+            "gpt-5.4",
+            "gpt-5-mini",
+            "gpt-4o-mini",
+            "claude-haiku-4.5",
+            "copilot-utility",
+            "copilot-utility-small",
+            "oswe-vscode",
+            "oswe-vscode-modelD"
+          ],
+          "default": "gpt-5.4",
+          "description": "Copilot model family used for analysis. The Dashboard model selector still reflects models exposed by your current VS Code session."
+        },
+        "emailAnalysis.outputLanguage": {
+          "type": "string",
+          "order": 5,
+          "enum": [
+            "zh-CN",
+            "en-US"
+          ],
+          "enumItemLabels": [
+            "简体中文",
+            "English"
+          ],
+          "default": "en-US",
+          "description": "Dashboard and analysis output language."
+        },
+        "emailAnalysis.analysisBatchSize": {
+          "type": "number",
+          "order": 9,
+          "default": 5,
+          "minimum": 1,
+          "description": "Maximum mails analyzed by Analyze Next Batch."
+        },
+        "emailAnalysis.autoAnalyzeEnabled": {
+          "type": "boolean",
+          "order": 10,
+          "default": true,
+          "description": "Allow mails under the classification threshold to be analyzed automatically."
+        },
+        "emailAnalysis.autoAnalyzeMaxClassificationLevel": {
+          "type": "number",
+          "order": 11,
+          "enum": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "enumItemLabels": [
+            "PUBLIC",
+            "INTERNAL",
+            "REGISTERED",
+            "HIGH REGISTERED"
+          ],
+          "default": 2,
+          "minimum": 0,
+          "maximum": 3,
+          "description": "Maximum mail classification allowed for automatic analysis."
+        },
+        "emailAnalysis.mailStoreRetentionDays": {
+          "type": "number",
+          "order": 15,
+          "default": 1,
+          "minimum": 1,
+          "description": "Raw local mail queue retention days."
+        },
+        "emailAnalysis.mailIndexRetentionDays": {
+          "type": "number",
+          "order": 16,
+          "default": 7,
+          "minimum": 1,
+          "description": "Local de-duplication index retention days."
+        },
+        "emailAnalysis.analysisRetentionDays": {
+          "type": "number",
+          "order": 17,
+          "default": 7,
+          "minimum": 1,
+          "description": "Analysis summary retention days."
+        },
+        "emailAnalysis.importantSenders": {
+          "type": "array",
+          "order": 12,
+          "items": {
+            "type": "string",
+            "default": "name@example.com"
+          },
+          "default": [],
+          "markdownDescription": "Important senders, mail groups, or keywords matched into `importantSender`. Examples: `person@example.com`, `team-alerts@company.com`, `Customer A`, `Project Phoenix`."
+        }
+      }
+    },
     "viewsContainers": {
       "activitybar": [
         {
@@ -56,10 +218,59 @@
         }
       ]
     },
+    "walkthroughs": [
+      {
+        "id": "emailAnalysis.gettingStarted",
+        "title": "Get Started with Email Analysis",
+        "description": "Collect local Outlook mail, review pending items, and analyze with GitHub Copilot.",
+        "steps": [
+          {
+            "id": "emailAnalysis.openDashboard",
+            "title": "Open the Dashboard",
+            "description": "Open the Email Analysis view from the Activity Bar. Use the language button in the top-right corner to switch between English and Simplified Chinese.",
+            "media": {
+              "markdown": "readme.md"
+            },
+            "completionEvents": [
+              "onView:emailAnalysis.dashboard"
+            ]
+          },
+          {
+            "id": "emailAnalysis.configure",
+            "title": "Configure Mail Range and Model",
+            "description": "Click Settings File to edit VS Code Settings. VS Code Settings are the single source of truth; the dashboard refreshes when settings change.",
+            "completionEvents": [
+              "onCommand:emailAnalysis.openSettings"
+            ]
+          },
+          {
+            "id": "emailAnalysis.fetch",
+            "title": "Fetch New Mail",
+            "description": "Click Fetch New to collect recent Outlook mail. After the first fetch, More History becomes available for loading older mail per folder.",
+            "completionEvents": [
+              "onCommand:emailAnalysis.pullMail"
+            ]
+          },
+          {
+            "id": "emailAnalysis.analyze",
+            "title": "Analyze with Copilot",
+            "description": "Choose an Analysis Model from the dashboard, then run Analyze Next Batch, Analyze Selected, or Analyze All Allowed.",
+            "completionEvents": [
+              "onCommand:emailAnalysis.analyze",
+              "onCommand:emailAnalysis.analyzeAllAllowed"
+            ]
+          }
+        ]
+      }
+    ],
     "commands": [
       {
         "command": "emailAnalysis.pullMail",
-        "title": "Email Analysis: Pull Mail"
+        "title": "Email Analysis: Fetch New Mail"
+      },
+      {
+        "command": "emailAnalysis.loadMore",
+        "title": "Email Analysis: More History"
       },
       {
         "command": "emailAnalysis.generateSampleDigest",

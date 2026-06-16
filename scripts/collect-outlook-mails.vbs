@@ -12,8 +12,9 @@ config.CompareMode = 1
 config.Add "max-items", 50
 config.Add "recent-hours", 24
 config.Add "folders", "Inbox"
-config.Add "body-chars", 1200
+config.Add "body-chars", 1500
 config.Add "output", ""
+config.Add "older-than-map", ""
 config.Add "sample", False
 config.Add "help", False
 
@@ -46,7 +47,7 @@ Sub ParseArgs(byVal cliArgs, byRef target)
     current = LCase(cliArgs(i))
 
     Select Case current
-      Case "--max-items", "--recent-hours", "--folders", "--body-chars", "--output"
+      Case "--max-items", "--recent-hours", "--folders", "--body-chars", "--output", "--older-than-map"
         If i + 1 >= cliArgs.Count Then
           Fail "Missing value for argument: " & current
         End If
@@ -86,7 +87,7 @@ Sub CollectFromOutlook(byVal outputPath, byRef target)
     Dim folderPath
     folderPath = Trim(folderNames(idx))
     If folderPath <> "" Then
-      CollectFolderItems ns, folderPath, CLng(target("max-items")), CLng(target("recent-hours")), CLng(target("body-chars")), collected, collectedCount
+      CollectFolderItems ns, folderPath, CLng(target("max-items")), CLng(target("recent-hours")), CLng(target("body-chars")), OlderThanForFolder(target("older-than-map"), folderPath), collected, collectedCount
     End If
   Next
 
@@ -97,7 +98,7 @@ Sub CollectFromOutlook(byVal outputPath, byRef target)
   WriteDigest outputPath, target, collected, collectedCount
 End Sub
 
-Sub CollectFolderItems(byRef ns, byVal folderPath, byVal maxItems, byVal recentHours, byVal bodyChars, byRef collected, byRef collectedCount)
+Sub CollectFolderItems(byRef ns, byVal folderPath, byVal maxItems, byVal recentHours, byVal bodyChars, byVal olderThan, byRef collected, byRef collectedCount)
   Dim folder
   Set folder = ResolveFolder(ns, folderPath)
   If folder Is Nothing Then
@@ -106,6 +107,17 @@ Sub CollectFolderItems(byRef ns, byVal folderPath, byVal maxItems, byVal recentH
 
   Dim items
   Set items = folder.Items
+
+  If Trim(CStr(olderThan)) <> "" Then
+    On Error Resume Next
+    Dim restricted
+    Set restricted = items.Restrict("[ReceivedTime] < '" & FormatRestrictDate(ParseAnchorDate(olderThan)) & "'")
+    If Err.Number <> 0 Then
+      Fail "Unable to restrict Outlook folder by ReceivedTime: " & folderPath & ". " & Err.Description
+    End If
+    On Error GoTo 0
+    Set items = restricted
+  End If
   items.Sort "[ReceivedTime]", True
 
   Dim cutoffEnabled
@@ -144,6 +156,75 @@ Sub CollectFolderItems(byRef ns, byVal folderPath, byVal maxItems, byVal recentH
     End If
   Next
 End Sub
+
+Function OlderThanForFolder(byVal mapText, byVal folderPath)
+  OlderThanForFolder = ""
+  If Trim(CStr(mapText)) = "" Then
+    Exit Function
+  End If
+
+  Dim pairs
+  pairs = Split(CStr(mapText), ";")
+  Dim targetKey
+  targetKey = LCase(Trim(folderPath))
+
+  Dim i
+  For i = 0 To UBound(pairs)
+    Dim pair
+    pair = pairs(i)
+    Dim pos
+    pos = InStr(pair, "=")
+    If pos > 0 Then
+      Dim key
+      key = LCase(Trim(Left(pair, pos - 1)))
+      If key = targetKey Then
+        OlderThanForFolder = Trim(Mid(pair, pos + 1))
+        Exit Function
+      End If
+    End If
+  Next
+End Function
+
+Function FormatRestrictDate(byVal dateValue)
+  Dim hourPart
+  Dim suffix
+  hourPart = Hour(dateValue)
+  suffix = "AM"
+  If hourPart >= 12 Then
+    suffix = "PM"
+  End If
+  If hourPart = 0 Then
+    hourPart = 12
+  ElseIf hourPart > 12 Then
+    hourPart = hourPart - 12
+  End If
+  FormatRestrictDate = Month(dateValue) & "/" & Day(dateValue) & "/" & Year(dateValue) & " " & hourPart & ":" & Right("0" & Minute(dateValue), 2) & " " & suffix
+End Function
+
+Function ParseAnchorDate(byVal value)
+  Dim text
+  text = Replace(Trim(CStr(value)), "T", " ")
+  Dim parts
+  parts = Split(text, " ")
+  If UBound(parts) < 1 Then
+    Fail "Invalid older-than date: " & value
+  End If
+
+  Dim dateParts
+  Dim timeParts
+  dateParts = Split(parts(0), "-")
+  timeParts = Split(parts(1), ":")
+  If UBound(dateParts) < 2 Or UBound(timeParts) < 1 Then
+    Fail "Invalid older-than date: " & value
+  End If
+
+  Dim secondPart
+  secondPart = 0
+  If UBound(timeParts) >= 2 Then
+    secondPart = CLng(timeParts(2))
+  End If
+  ParseAnchorDate = DateSerial(CLng(dateParts(0)), CLng(dateParts(1)), CLng(dateParts(2))) + TimeSerial(CLng(timeParts(0)), CLng(timeParts(1)), secondPart)
+End Function
 
 Function ResolveFolder(byRef ns, byVal folderPath)
   Dim normalized
@@ -463,6 +544,7 @@ Sub PrintUsage()
   WScript.Echo "  --recent-hours <n>   Only include mails newer than n hours."
   WScript.Echo "  --folders <a;b;c>    Outlook folders to scan."
   WScript.Echo "  --body-chars <n>     Body excerpt length."
+  WScript.Echo "  --older-than-map <m> Per-folder older-than anchors: Inbox=2026-06-16 10:00:00;Inbox/Sub=..."
   WScript.Echo "  --output <path>      Output markdown path."
   WScript.Echo "  --sample             Generate sample digest without Outlook."
   WScript.Echo "  --help               Show this message."

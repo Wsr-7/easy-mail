@@ -3,12 +3,13 @@ import type { DigestData } from "./digest";
 
 export const CATEGORY_ORDER = [
   "mustHandleToday",
+  "importantSender",
   "risk",
   "waitingForMe",
   "followUp",
   "notice",
-  "ignored",
-  "uncertain"
+  "uncertain",
+  "ignored"
 ] as const;
 
 const PRIORITY_ORDER: Record<string, number> = {

@@ -34,9 +34,17 @@ export interface MailIndexItem {
   lastSeenAt: string;
 }
 
+export interface MailFolderAnchor {
+  folder: string;
+  newestReceivedTime: string;
+  oldestReceivedTime: string;
+  lastSeenAt: string;
+}
+
 export interface MailIndex {
   generatedAt: string;
   lastPullAt: string;
+  folderAnchors: Record<string, MailFolderAnchor>;
   items: MailIndexItem[];
 }
 
@@ -68,6 +76,7 @@ export function emptyMailIndex(): MailIndex {
   return {
     generatedAt: new Date().toISOString(),
     lastPullAt: "",
+    folderAnchors: {},
     items: []
   };
 }
@@ -75,9 +84,11 @@ export function emptyMailIndex(): MailIndex {
 export function normalizeMailIndex(input: unknown): MailIndex {
   const base = isObject(input) ? input : {};
   const items = Array.isArray(base.items) ? base.items.map(normalizeMailIndexItem).filter(Boolean) as MailIndexItem[] : [];
+  const folderAnchors = normalizeFolderAnchors(base.folderAnchors, items);
   return {
     generatedAt: String(base.generatedAt || new Date().toISOString()),
     lastPullAt: String(base.lastPullAt || ""),
+    folderAnchors,
     items
   };
 }
@@ -130,6 +141,7 @@ export function mergeDigestIntoIndex(index: MailIndex, digest: DigestData): Mail
   return {
     ...index,
     lastPullAt: seenAt,
+    folderAnchors: buildFolderAnchors([...byId.values()], index.folderAnchors, seenAt),
     items: [...byId.values()].sort(compareMailIndexItems)
   };
 }
@@ -178,8 +190,8 @@ export function pruneMailStore(store: MailStore, retentionDays: number, now: Dat
   return {
     ...store,
     items: store.items.filter((item) => {
-      const received = Date.parse(String(item.receivedTime || "").replace(" ", "T"));
-      return !Number.isFinite(received) || received >= cutoff;
+      const pulled = parseDate(item.pulledAt) || parseDate(item.receivedTime);
+      return !Number.isFinite(pulled) || pulled >= cutoff;
     })
   };
 }
@@ -189,13 +201,27 @@ export function pruneMailIndex(index: MailIndex, retentionDays: number, now: Dat
     return index;
   }
   const cutoff = now.getTime() - retentionDays * 24 * 60 * 60 * 1000;
+  const items = index.items.filter((item) => {
+    const seen = parseDate(item.lastSeenAt) || parseDate(item.receivedTime);
+    return !Number.isFinite(seen) || seen >= cutoff;
+  });
   return {
     ...index,
-    items: index.items.filter((item) => {
-      const received = Date.parse(String(item.receivedTime || "").replace(" ", "T"));
-      return !Number.isFinite(received) || received >= cutoff;
-    })
+    folderAnchors: buildFolderAnchors(items, {}, index.lastPullAt),
+    items
   };
+}
+
+export function folderOldestReceivedTimes(index: MailIndex, folders: string[]): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const folder of folders) {
+    const key = normalizeFolderName(folder);
+    const anchor = index.folderAnchors[key];
+    if (anchor?.oldestReceivedTime) {
+      result[folder] = anchor.oldestReceivedTime;
+    }
+  }
+  return result;
 }
 
 export function removeStoredMailByIds(store: MailStore, mailIds: string[]): MailStore {
@@ -286,12 +312,68 @@ function normalizeMailIndexItem(input: unknown): MailIndexItem | null {
   };
 }
 
+function normalizeFolderAnchors(input: unknown, items: MailIndexItem[]): Record<string, MailFolderAnchor> {
+  if (!isObject(input)) {
+    return buildFolderAnchors(items, {}, "");
+  }
+  const anchors: Record<string, MailFolderAnchor> = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (!isObject(value)) {
+      continue;
+    }
+    const folder = String(value.folder || key).trim();
+    if (!folder) {
+      continue;
+    }
+    anchors[normalizeFolderName(folder)] = {
+      folder,
+      newestReceivedTime: String(value.newestReceivedTime || ""),
+      oldestReceivedTime: String(value.oldestReceivedTime || ""),
+      lastSeenAt: String(value.lastSeenAt || "")
+    };
+  }
+  return buildFolderAnchors(items, anchors, "");
+}
+
+function buildFolderAnchors(items: MailIndexItem[], previous: Record<string, MailFolderAnchor>, seenAt: string): Record<string, MailFolderAnchor> {
+  const byFolder = new Map<string, MailIndexItem[]>();
+  for (const item of items) {
+    const key = normalizeFolderName(item.folder);
+    if (!key) {
+      continue;
+    }
+    byFolder.set(key, [...(byFolder.get(key) || []), item]);
+  }
+
+  const anchors: Record<string, MailFolderAnchor> = {};
+  for (const [key, folderItems] of byFolder) {
+    const sorted = [...folderItems].sort(compareMailIndexItems);
+    const previousAnchor = previous[key];
+    anchors[key] = {
+      folder: sorted[0]?.folder || previousAnchor?.folder || key,
+      newestReceivedTime: sorted[0]?.receivedTime || previousAnchor?.newestReceivedTime || "",
+      oldestReceivedTime: sorted[sorted.length - 1]?.receivedTime || previousAnchor?.oldestReceivedTime || "",
+      lastSeenAt: seenAt || previousAnchor?.lastSeenAt || sorted[0]?.lastSeenAt || ""
+    };
+  }
+  return anchors;
+}
+
+function normalizeFolderName(value: string): string {
+  return String(value || "").trim().toLowerCase();
+}
+
 function compareStoredMail(a: StoredMail, b: StoredMail): number {
   return String(b.receivedTime || "").localeCompare(String(a.receivedTime || ""));
 }
 
 function compareMailIndexItems(a: MailIndexItem, b: MailIndexItem): number {
   return String(b.receivedTime || "").localeCompare(String(a.receivedTime || ""));
+}
+
+function parseDate(value: string): number {
+  const parsed = Date.parse(String(value || "").replace(" ", "T"));
+  return Number.isFinite(parsed) ? parsed : NaN;
 }
 
 function unique(values: string[]): string[] {

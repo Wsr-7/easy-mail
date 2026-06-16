@@ -8,7 +8,7 @@ import { buildQueueState, classificationFor, ensureClassifications, normalizeCla
 import { buildSummaryMarkdown } from "./lib/summary";
 import { buildDashboardState, CATEGORY_ORDER, type DashboardState } from "./lib/dashboard-state";
 import { allowedCategoryIds, composeAnalysisPrompt, normalizePromptConfig, type PromptConfig } from "./lib/prompt-config";
-import { buildBatchDigestMarkdown, emptyMailIndex, emptyMailStore, mergeDigestIntoIndex, mergeDigestIntoStore, normalizeMailIndex, normalizeMailStore, pruneMailIndex, pruneMailStore, removeStoredMailByIds, type MailIndex, type MailStore, type StoredMail } from "./lib/mail-store";
+import { buildBatchDigestMarkdown, emptyMailIndex, emptyMailStore, folderOldestReceivedTimes, mergeDigestIntoIndex, mergeDigestIntoStore, normalizeMailIndex, normalizeMailStore, pruneMailIndex, pruneMailStore, removeStoredMailByIds, type MailIndex, type MailStore, type StoredMail } from "./lib/mail-store";
 
 type Locale = "zh-CN" | "en-US";
 
@@ -18,8 +18,15 @@ type BusyState = {
   startedAt: string;
 };
 
+type AvailableModel = {
+  id: string;
+  family: string;
+  name: string;
+  vendor: string;
+};
+
 type DashboardLabels = {
-  toolbar: Record<"pullMail" | "sample" | "analyze" | "analyzeSelected" | "analyzeAllAllowed" | "refresh" | "openDigest" | "openSummary" | "settingsFile" | "promptConfig" | "clearStore", string>;
+  toolbar: Record<"pullMail" | "loadMore" | "sample" | "analyze" | "analyzeSelected" | "analyzeAllAllowed" | "refresh" | "openDigest" | "openSummary" | "settingsFile" | "promptConfig" | "clearStore", string>;
   settings: {
     title: string;
     range: string;
@@ -30,9 +37,14 @@ type DashboardLabels = {
     bodyChars: string;
     bodyCharsHelp: string;
     modelFamily: string;
+    noModel: string;
     batchSize: string;
     autoAnalyze: string;
     maxClassification: string;
+    classificationPublic: string;
+    classificationInternal: string;
+    classificationRegistered: string;
+    classificationHighRegistered: string;
     storeRetentionDays: string;
     indexRetentionDays: string;
     analysisRetentionDays: string;
@@ -48,14 +60,15 @@ type DashboardLabels = {
   categories: Record<string, string>;
   card: Record<"from" | "received" | "summary" | "reason" | "suggestedAction" | "copyDraft" | "ignore" | "noItems", string>;
   pending: Record<"title" | "blockedTitle" | "classification" | "autoAllowed" | "manualRequired" | "select", string>;
-  progress: Record<"pullMail" | "sampleDigest" | "analyze", string> & { detail: string };
+  progress: Record<"pullMail" | "loadMore" | "sampleDigest" | "analyze", string> & { detail: string };
   model: Record<"fallback" | "preferred", string>;
 };
 
 const LABELS: Record<Locale, DashboardLabels> = {
   "zh-CN": {
     toolbar: {
-      pullMail: "拉取邮件",
+      pullMail: "获取新邮件",
+      loadMore: "更多历史",
       sample: "示例数据",
       analyze: "分析下一批",
       analyzeSelected: "分析选中",
@@ -76,10 +89,15 @@ const LABELS: Record<Locale, DashboardLabels> = {
       folders: "文件夹（用 ; 分隔）",
       bodyChars: "正文截断字符数",
       bodyCharsHelp: "限制每封邮件送给 Copilot 的正文长度，避免分析过慢或上下文过大。",
-      modelFamily: "请求模型",
+      modelFamily: "Analysis Model",
+      noModel: "没有可用模型",
       batchSize: "每批分析数量",
       autoAnalyze: "允许自动分析",
       maxClassification: "自动分析最高密级",
+      classificationPublic: "PUBLIC",
+      classificationInternal: "INTERNAL",
+      classificationRegistered: "REGISTERED",
+      classificationHighRegistered: "HIGH REGISTERED",
       storeRetentionDays: "原文缓存保留天数",
       indexRetentionDays: "去重索引保留天数",
       analysisRetentionDays: "分析摘要保留天数",
@@ -87,8 +105,8 @@ const LABELS: Record<Locale, DashboardLabels> = {
       save: "保存设置",
       recentHoursOption: "最近小时数",
       maxItemsOption: "最多邮件数",
-      zhOption: "中文界面和中文分析",
-      enOption: "English UI and analysis"
+      zhOption: "简体中文",
+      enOption: "English"
     },
     meta: {
       range: "范围",
@@ -137,7 +155,8 @@ const LABELS: Record<Locale, DashboardLabels> = {
       select: "选择"
     },
     progress: {
-      pullMail: "正在拉取邮件",
+      pullMail: "正在获取新邮件",
+      loadMore: "正在加载历史邮件",
       sampleDigest: "正在生成示例数据",
       analyze: "正在调用 Copilot 分析",
       detail: "任务进行中，请稍候..."
@@ -149,7 +168,8 @@ const LABELS: Record<Locale, DashboardLabels> = {
   },
   "en-US": {
     toolbar: {
-      pullMail: "Pull Mail",
+      pullMail: "Fetch New",
+      loadMore: "More History",
       sample: "Sample",
       analyze: "Analyze Next Batch",
       analyzeSelected: "Analyze Selected",
@@ -170,10 +190,15 @@ const LABELS: Record<Locale, DashboardLabels> = {
       folders: "Folders (; separated)",
       bodyChars: "Body Chars",
       bodyCharsHelp: "Limits how many body characters per email are sent to Copilot.",
-      modelFamily: "Requested Model",
+      modelFamily: "Analysis Model",
+      noModel: "No available model",
       batchSize: "Batch Size",
       autoAnalyze: "Allow Auto Analysis",
       maxClassification: "Max Auto Classification",
+      classificationPublic: "PUBLIC",
+      classificationInternal: "INTERNAL",
+      classificationRegistered: "REGISTERED",
+      classificationHighRegistered: "HIGH REGISTERED",
       storeRetentionDays: "Raw Cache Retention Days",
       indexRetentionDays: "Index Retention Days",
       analysisRetentionDays: "Summary Retention Days",
@@ -181,8 +206,8 @@ const LABELS: Record<Locale, DashboardLabels> = {
       save: "Save Settings",
       recentHoursOption: "Recent Hours",
       maxItemsOption: "Max Items",
-      zhOption: "中文界面和中文分析",
-      enOption: "English UI and analysis"
+      zhOption: "简体中文",
+      enOption: "English"
     },
     meta: {
       range: "Range",
@@ -231,7 +256,8 @@ const LABELS: Record<Locale, DashboardLabels> = {
       select: "Select"
     },
     progress: {
-      pullMail: "Pulling mail",
+      pullMail: "Fetching new mail",
+      loadMore: "Loading mail history",
       sampleDigest: "Generating sample digest",
       analyze: "Analyzing with Copilot",
       detail: "Task is running. Please wait..."
@@ -248,6 +274,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider("emailAnalysis.dashboard", app.dashboardProvider),
     vscode.commands.registerCommand("emailAnalysis.pullMail", () => app.pullMail(false)),
+    vscode.commands.registerCommand("emailAnalysis.loadMore", () => app.loadMore()),
     vscode.commands.registerCommand("emailAnalysis.generateSampleDigest", () => app.pullMail(true)),
     vscode.commands.registerCommand("emailAnalysis.analyze", () => app.analyze()),
     vscode.commands.registerCommand("emailAnalysis.analyzeAllAllowed", () => app.analyzeAllAllowed()),
@@ -267,6 +294,7 @@ export function deactivate(): void {}
 class EmailAnalysisApp {
   public readonly dashboardProvider: DashboardProvider;
   private busy: BusyState | null = null;
+  private logFilePath = "";
 
   public constructor(private readonly context: vscode.ExtensionContext) {
     this.dashboardProvider = new DashboardProvider(() => this.getDashboardHtml(), (message) => this.handleMessage(message));
@@ -274,7 +302,15 @@ class EmailAnalysisApp {
 
   public async initialize(): Promise<void> {
     await fs.promises.mkdir(this.getDataDir(), { recursive: true });
+    await this.initializeLogger();
     await this.ensureConfig();
+    await this.log("initialize", { extensionPath: this.context.extensionPath, dataDir: this.getDataDir() });
+    this.context.subscriptions.push(vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration("emailAnalysis")) {
+        void this.log("settings:changed", {});
+        void this.refresh();
+      }
+    }));
     await this.refresh();
   }
 
@@ -286,7 +322,15 @@ class EmailAnalysisApp {
     });
   }
 
-  private async pullMailCore(forceSample: boolean): Promise<void> {
+  public async loadMore(): Promise<void> {
+    const locale = await this.readLocale();
+    const labels = getLabels(locale);
+    await this.runWithBusy(labels.progress.loadMore, labels.progress.detail, async () => {
+      await this.pullMailCore(false, true);
+    });
+  }
+
+  private async pullMailCore(forceSample: boolean, loadMore = false): Promise<void> {
     const config = await this.readConfig();
     await fs.promises.mkdir(this.getDataDir(), { recursive: true });
     const scriptPath = await this.findCollectorScript();
@@ -294,18 +338,28 @@ class EmailAnalysisApp {
     const maxItems = Number(config.maxItems || 50);
     const recentHours = Number(config.recentHours || 24);
     const rangeMode = String(config.rangeMode || "recentHours");
+    const folders = Array.isArray(config.folders) ? config.folders.map(String) : ["Inbox"];
+    const currentIndex = pruneMailIndex(await this.readMailIndex(), Number(config.mailIndexRetentionDays || 7));
     args.push("--max-items", String(maxItems));
-    args.push("--recent-hours", String(rangeMode === "maxItems" ? 0 : recentHours));
-    args.push("--folders", (config.folders || ["Inbox"]).join(";"));
-    args.push("--body-chars", String(config.bodyExcerptChars || 1200));
+    args.push("--recent-hours", String(loadMore || rangeMode === "maxItems" ? 0 : recentHours));
+    args.push("--folders", folders.join(";"));
+    args.push("--body-chars", String(config.bodyExcerptChars || 1500));
     args.push("--output", this.getDigestPath());
+    if (loadMore) {
+      const anchors = folderOldestReceivedTimes(currentIndex, folders);
+      const olderThanMap = serializeFolderDateMap(anchors);
+      if (!olderThanMap) {
+        throw new Error("No folder anchors exist yet. Run Pull Mail before Load More.");
+      }
+      args.push("--older-than-map", olderThanMap);
+    }
     if (forceSample || config.sampleMode) {
       args.push("--sample");
     }
 
-    await runProcess("cscript.exe", args);
+    await this.log("pullMail:start", { forceSample, loadMore, maxItems, recentHours, rangeMode, folders });
+    await runProcess("cscript.exe", args, 30000, (event, data) => void this.log(`process:${event}`, data));
     const digest = parseDigest(await fs.promises.readFile(this.getDigestPath(), "utf8"));
-    const currentIndex = pruneMailIndex(await this.readMailIndex(), Number(config.mailIndexRetentionDays || 7));
     const merge = mergeDigestIntoStore(await this.readMailStore(), digest, currentIndex.items.map((item) => item.mailId));
     const nextIndex = pruneMailIndex(mergeDigestIntoIndex(currentIndex, digest), Number(config.mailIndexRetentionDays || 7));
     const prunedStore = pruneMailStore(merge.store, Number(config.mailStoreRetentionDays || 1));
@@ -313,6 +367,13 @@ class EmailAnalysisApp {
     await this.writeMailIndex(nextIndex);
     const classificationCache = ensureClassifications(prunedStore.items, await this.readClassificationCache());
     await this.writeClassificationCache(classificationCache);
+    await this.log("pullMail:done", {
+      digestItems: digest.items.length,
+      added: merge.added,
+      skipped: merge.skipped,
+      storeItems: prunedStore.items.length,
+      indexItems: nextIndex.items.length
+    });
     await this.refresh();
     await vscode.window.showInformationMessage(`Email digest generated. Added ${merge.added}, skipped ${merge.skipped}.`);
   }
@@ -348,6 +409,7 @@ class EmailAnalysisApp {
     const index = pruneMailIndex(await this.readMailIndex(), Number(config.mailIndexRetentionDays || 7));
     await this.writeMailIndex(index);
     if (!store.items.length) {
+      await this.log("analyze:noStoreItems", { indexItems: index.items.length });
       throw new Error("No pulled mail exists. Run Pull Mail first.");
     }
     const classificationCache = ensureClassifications(store.items, await this.readClassificationCache());
@@ -369,6 +431,7 @@ class EmailAnalysisApp {
         ? queue.allowed
         : queue.allowed.slice(0, batchSize);
     if (!batch.length) {
+      await this.log("analyze:noBatch", { pending: queue.pending.length, allowed: queue.allowed.length, blocked: queue.blocked.length });
       throw new Error("No mail is available for analysis. Check pending mail or classification gates.");
     }
 
@@ -377,19 +440,22 @@ class EmailAnalysisApp {
     const digestText = buildBatchDigestMarkdown(batch);
     const basePrompt = await fs.promises.readFile(path.join(this.context.extensionPath, "prompts", "base-system.md"), "utf8");
     const outputSchemaPrompt = await fs.promises.readFile(path.join(this.context.extensionPath, "prompts", "output-schema.md"), "utf8");
-    const configuredFamily = typeof config.modelFamily === "string" ? config.modelFamily.trim() : "gpt-5.4";
-    const preferredModels = configuredFamily
-      ? await vscode.lm.selectChatModels({ vendor: "copilot", family: configuredFamily })
-      : [];
-    const models = preferredModels.length ? preferredModels : await vscode.lm.selectChatModels({ vendor: "copilot" });
-    if (!models.length) {
-      throw new Error("No GitHub Copilot model is available in this VS Code session.");
+    const configuredModel = typeof config.modelFamily === "string" ? config.modelFamily.trim() : "gpt-5.4";
+    await this.log("analyze:start", { selection: Array.isArray(selection) ? "selected" : selection || "nextBatch", batchSize: batch.length, configuredModel });
+    const models = await vscode.lm.selectChatModels({ vendor: "copilot" });
+    const selectedModelIndex = selectConfiguredModelIndex(models.map(modelToAvailableModel), configuredModel);
+    const selectedModel = selectedModelIndex >= 0 ? models[selectedModelIndex] : undefined;
+    await this.log("analyze:models", {
+      availableCount: models.length,
+      selected: selectedModel ? { id: selectedModel.id, family: selectedModel.family, name: selectedModel.name, vendor: selectedModel.vendor } : null
+    });
+    if (!selectedModel) {
+      throw new Error("Select an available GitHub Copilot model before analyzing.");
     }
 
-    const selectedModel = models[0];
     await this.writeModelInfo({
-      requestedFamily: configuredFamily || "auto",
-      usedFallback: preferredModels.length === 0,
+      requestedFamily: configuredModel || "auto",
+      usedFallback: false,
       actualFamily: selectedModel.family,
       actualId: selectedModel.id,
       actualName: selectedModel.name,
@@ -401,7 +467,7 @@ class EmailAnalysisApp {
       basePrompt,
       outputSchemaPrompt,
       digestText,
-      outputLanguage: String(config.outputLanguage || "zh-CN"),
+      outputLanguage: String(config.outputLanguage || "en-US"),
       promptConfig
     });
     const response = await selectedModel.sendRequest(
@@ -410,6 +476,7 @@ class EmailAnalysisApp {
       new vscode.CancellationTokenSource().token
     );
     const raw = await readResponseText(response.text);
+    await this.log("analyze:response", { rawLength: raw.length });
     const analysis = parseAnalysisJson(raw, allowedCategoryIds(promptConfig));
 
     const normalized = normalizeAnalysis(analysis, allowedCategoryIds(promptConfig));
@@ -422,11 +489,13 @@ class EmailAnalysisApp {
     await fs.promises.writeFile(this.getAnalysisPath(), `${JSON.stringify(merged, null, 2)}\n`, "utf8");
     await fs.promises.writeFile(this.getSummaryPath(), buildSummaryMarkdown(merged, summaryLabels), "utf8");
     await this.writeMailStore(removeStoredMailByIds(await this.readMailStore(), batch.map((item) => item.mailId)));
+    await this.log("analyze:done", { batchSize: batch.length, mergedItems: merged.items.length });
     await this.refresh();
     await vscode.window.showInformationMessage(`Email analysis completed for ${batch.length} mail(s).`);
   }
 
   private async runWithBusy<T>(label: string, detail: string, task: () => Promise<T>): Promise<T> {
+    await this.log("busy:start", { label });
     this.busy = { label, detail, startedAt: new Date().toISOString() };
     await this.refresh();
     try {
@@ -437,9 +506,13 @@ class EmailAnalysisApp {
           return await task();
         }
       );
+    } catch (error) {
+      await this.log("busy:error", { label, error: formatError(error) });
+      throw error;
     } finally {
       this.busy = null;
       await this.refresh();
+      await this.log("busy:end", { label });
     }
   }
 
@@ -456,7 +529,7 @@ class EmailAnalysisApp {
   }
 
   public async openSettings(): Promise<void> {
-    await openTextDocument(this.getConfigPath());
+    await vscode.commands.executeCommand("workbench.action.openSettings", "@ext:Wsr-7.email-analysis-poc");
   }
 
   public async openPromptConfig(): Promise<void> {
@@ -530,8 +603,26 @@ class EmailAnalysisApp {
 
   private async readConfig(): Promise<Record<string, any>> {
     await this.ensureConfig();
-    const raw = await fs.promises.readFile(this.getConfigPath(), "utf8");
-    return JSON.parse(raw);
+    const defaults = JSON.parse(await fs.promises.readFile(path.join(this.context.extensionPath, "default-config.json"), "utf8"));
+    const settings = vscode.workspace.getConfiguration("emailAnalysis");
+    return {
+      ...defaults,
+      rangeMode: settings.get("rangeMode", defaults.rangeMode),
+      recentHours: settings.get("recentHours", defaults.recentHours),
+      maxItems: settings.get("maxItems", defaults.maxItems),
+      folders: settings.get("folders", defaults.folders),
+      bodyExcerptChars: settings.get("bodyExcerptChars", defaults.bodyExcerptChars),
+      sampleMode: settings.get("sampleMode", defaults.sampleMode),
+      modelFamily: settings.get("modelFamily", defaults.modelFamily),
+      outputLanguage: settings.get("outputLanguage", defaults.outputLanguage || "en-US"),
+      analysisBatchSize: settings.get("analysisBatchSize", defaults.analysisBatchSize),
+      autoAnalyzeEnabled: settings.get("autoAnalyzeEnabled", defaults.autoAnalyzeEnabled),
+      autoAnalyzeMaxClassificationLevel: settings.get("autoAnalyzeMaxClassificationLevel", defaults.autoAnalyzeMaxClassificationLevel),
+      mailStoreRetentionDays: settings.get("mailStoreRetentionDays", defaults.mailStoreRetentionDays),
+      mailIndexRetentionDays: settings.get("mailIndexRetentionDays", defaults.mailIndexRetentionDays),
+      analysisRetentionDays: settings.get("analysisRetentionDays", defaults.analysisRetentionDays),
+      importantSenders: settings.get("importantSenders", defaults.importantSenders)
+    };
   }
 
   private async readLocale(): Promise<Locale> {
@@ -544,6 +635,32 @@ class EmailAnalysisApp {
 
   private async writeConfig(config: Record<string, any>): Promise<void> {
     await fs.promises.writeFile(this.getConfigPath(), `${JSON.stringify(config, null, 2)}\n`, "utf8");
+  }
+
+  private async updateSettings(values: Record<string, unknown>): Promise<void> {
+    const settings = vscode.workspace.getConfiguration("emailAnalysis");
+    for (const [key, value] of Object.entries(values)) {
+      await settings.update(key, value, vscode.ConfigurationTarget.Global);
+    }
+  }
+
+  private async initializeLogger(): Promise<void> {
+    const logDir = path.join(this.context.globalStorageUri.fsPath, "logs");
+    await fs.promises.mkdir(logDir, { recursive: true });
+    this.logFilePath = path.join(logDir, "email-analysis.log");
+    await this.log("logger:ready", { logFilePath: this.logFilePath });
+  }
+
+  private async log(event: string, data: Record<string, unknown>): Promise<void> {
+    if (!this.logFilePath) {
+      return;
+    }
+    const entry = {
+      ts: new Date().toISOString(),
+      event,
+      ...data
+    };
+    await fs.promises.appendFile(this.logFilePath, `${JSON.stringify(entry)}\n`, "utf8").catch(() => undefined);
   }
 
   private async readIgnoredIds(): Promise<string[]> {
@@ -577,6 +694,16 @@ class EmailAnalysisApp {
 
   private async writeModelInfo(info: Record<string, unknown>): Promise<void> {
     await fs.promises.writeFile(this.getModelInfoPath(), `${JSON.stringify(info, null, 2)}\n`, "utf8");
+  }
+
+  private async readAvailableModels(): Promise<AvailableModel[]> {
+    try {
+      const models = await vscode.lm.selectChatModels({ vendor: "copilot" });
+      return models.map(modelToAvailableModel);
+    } catch (error) {
+      await this.log("models:error", { error: formatError(error) });
+      return [];
+    }
   }
 
   private async readAnalysisResult(): Promise<AnalysisResult> {
@@ -749,6 +876,11 @@ class EmailAnalysisApp {
       return;
     }
 
+    if (typed.type === "loadMore") {
+      await this.loadMore();
+      return;
+    }
+
     if (typed.type === "sampleDigest") {
       await this.pullMail(true);
       return;
@@ -798,24 +930,23 @@ class EmailAnalysisApp {
     const current = await this.readConfig();
     const patch = message.config as Record<string, unknown>;
     const next = {
-      ...current,
-      rangeMode: patch.rangeMode === "maxItems" ? "maxItems" : "recentHours",
-      recentHours: positiveNumber(patch.recentHours, current.recentHours || 24),
-      maxItems: positiveNumber(patch.maxItems, current.maxItems || 50),
-      folders: parseFolders(patch.folders, current.folders || ["Inbox"]),
-      bodyExcerptChars: positiveNumber(patch.bodyExcerptChars, current.bodyExcerptChars || 1200),
-      outputLanguage: patch.outputLanguage === "en-US" ? "en-US" : "zh-CN",
-      modelFamily: String(patch.modelFamily || current.modelFamily || "gpt-5.4").trim(),
-      analysisBatchSize: positiveNumber(patch.analysisBatchSize, current.analysisBatchSize || 5),
-      autoAnalyzeEnabled: patch.autoAnalyzeEnabled === true || patch.autoAnalyzeEnabled === "true",
-      autoAnalyzeMaxClassificationLevel: positiveNumber(patch.autoAnalyzeMaxClassificationLevel, current.autoAnalyzeMaxClassificationLevel || 2),
-      mailStoreRetentionDays: positiveNumber(patch.mailStoreRetentionDays, current.mailStoreRetentionDays || 1),
-      mailIndexRetentionDays: positiveNumber(patch.mailIndexRetentionDays, current.mailIndexRetentionDays || 7),
-      analysisRetentionDays: positiveNumber(patch.analysisRetentionDays, current.analysisRetentionDays || 7),
-      importantSenders: parseFolders(patch.importantSenders, current.importantSenders || [])
+      rangeMode: Object.prototype.hasOwnProperty.call(patch, "rangeMode") ? (patch.rangeMode === "maxItems" ? "maxItems" : "recentHours") : current.rangeMode,
+      recentHours: Object.prototype.hasOwnProperty.call(patch, "recentHours") ? positiveNumber(patch.recentHours, current.recentHours || 24) : current.recentHours,
+      maxItems: Object.prototype.hasOwnProperty.call(patch, "maxItems") ? positiveNumber(patch.maxItems, current.maxItems || 50) : current.maxItems,
+      folders: Object.prototype.hasOwnProperty.call(patch, "folders") ? parseFolders(patch.folders, current.folders || ["Inbox"]) : current.folders,
+      bodyExcerptChars: Object.prototype.hasOwnProperty.call(patch, "bodyExcerptChars") ? positiveNumber(patch.bodyExcerptChars, current.bodyExcerptChars || 1500) : current.bodyExcerptChars,
+      outputLanguage: Object.prototype.hasOwnProperty.call(patch, "outputLanguage") ? (patch.outputLanguage === "zh-CN" ? "zh-CN" : "en-US") : current.outputLanguage,
+      modelFamily: Object.prototype.hasOwnProperty.call(patch, "modelFamily") ? String(patch.modelFamily || current.modelFamily || "gpt-5.4").trim() : current.modelFamily,
+      analysisBatchSize: Object.prototype.hasOwnProperty.call(patch, "analysisBatchSize") ? positiveNumber(patch.analysisBatchSize, current.analysisBatchSize || 5) : current.analysisBatchSize,
+      autoAnalyzeEnabled: Object.prototype.hasOwnProperty.call(patch, "autoAnalyzeEnabled") ? (patch.autoAnalyzeEnabled === true || patch.autoAnalyzeEnabled === "true") : current.autoAnalyzeEnabled,
+      autoAnalyzeMaxClassificationLevel: Object.prototype.hasOwnProperty.call(patch, "autoAnalyzeMaxClassificationLevel") ? positiveNumber(patch.autoAnalyzeMaxClassificationLevel, current.autoAnalyzeMaxClassificationLevel || 2) : current.autoAnalyzeMaxClassificationLevel,
+      mailStoreRetentionDays: Object.prototype.hasOwnProperty.call(patch, "mailStoreRetentionDays") ? positiveNumber(patch.mailStoreRetentionDays, current.mailStoreRetentionDays || 1) : current.mailStoreRetentionDays,
+      mailIndexRetentionDays: Object.prototype.hasOwnProperty.call(patch, "mailIndexRetentionDays") ? positiveNumber(patch.mailIndexRetentionDays, current.mailIndexRetentionDays || 7) : current.mailIndexRetentionDays,
+      analysisRetentionDays: Object.prototype.hasOwnProperty.call(patch, "analysisRetentionDays") ? positiveNumber(patch.analysisRetentionDays, current.analysisRetentionDays || 7) : current.analysisRetentionDays,
+      importantSenders: Object.prototype.hasOwnProperty.call(patch, "importantSenders") ? parseFolders(patch.importantSenders, current.importantSenders || []) : current.importantSenders
     };
-    await this.writeConfig(next);
-    await vscode.window.showInformationMessage("Email Analysis settings saved.");
+    await this.updateSettings(next);
+    await vscode.window.showInformationMessage("Email Analysis settings saved to VS Code Settings.");
   }
 
   private async getDashboardHtml(): Promise<string> {
@@ -835,13 +966,26 @@ class EmailAnalysisApp {
     const promptConfig = extendedState.promptConfig || normalizePromptConfig({});
     promptConfig.importantSenders = mergeStringLists(promptConfig.importantSenders, parseFolders(config.importantSenders, []));
     const categoryLabels = buildCategoryLabels(labels, promptConfig, locale);
-    const rows = state.categories.map((entry) => renderCategory(entry.id, entry.items, labels, categoryLabels)).join("");
+    const categoryHtml = new Map(state.categories.map((entry) => [entry.id, renderCategory(entry.id, entry.items, labels, categoryLabels)]));
+    const mustHandleHtml = categoryHtml.get("mustHandleToday") || "";
+    const rows = state.categories
+      .filter((entry) => entry.id !== "mustHandleToday")
+      .map((entry) => categoryHtml.get(entry.id) || "")
+      .join("");
     const store = extendedState.store || emptyMailStore();
     const index = extendedState.index || emptyMailIndex();
     const queue = extendedState.queue || { pending: [], blocked: [], analysed: [], allowed: [] };
     const classifications = extendedState.classifications || normalizeClassificationCache({});
+    const availableModels = await this.readAvailableModels();
+    const configuredModel = String(config.modelFamily || "");
+    const canAnalyze = !!selectConfiguredModel(availableModels, configuredModel);
+    const analysisDisabled = canAnalyze ? "" : " disabled";
+    const modelOptions = renderModelOptions(availableModels, configuredModel, labels);
     const pendingHtml = renderPendingPanel(labels.pending.title, queue.pending, classifications, labels, queue.allowed, false);
     const blockedHtml = renderPendingPanel(labels.pending.blockedTitle, queue.blocked, classifications, labels, [], true);
+    const configuredFolders = Array.isArray(config.folders) ? config.folders.map(String) : ["Inbox"];
+    const hasHistoryAnchors = Object.keys(folderOldestReceivedTimes(index, configuredFolders)).length > 0;
+    const loadMoreDisabled = hasHistoryAnchors ? "" : " disabled";
     const busyHtml = this.busy
       ? `<div class="busy"><div class="busy-row"><strong>${escapeHtml(this.busy.label)}</strong><span>${escapeHtml(this.busy.detail)}</span></div><div class="busy-bar"><span></span></div></div>`
       : "";
@@ -852,11 +996,14 @@ class EmailAnalysisApp {
   <meta charset="utf-8" />
   <style>
     :root { color-scheme: light; }
-    body { font-family: "Segoe UI", sans-serif; margin: 0; padding: 12px; color: #1b2a34; background: #f3f0ea; }
-    .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+    body { font-family: "Segoe UI", sans-serif; margin: 0; padding: 56px 12px 12px; color: #1b2a34; background: #f3f0ea; }
+    .toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; }
+    .toolbar-group { display: flex; gap: 8px; flex-wrap: wrap; padding: 4px; border-radius: 10px; background: rgba(255, 255, 255, 0.55); }
     button { border: 0; border-radius: 8px; padding: 8px 12px; background: #0f4c5c; color: #fff; cursor: pointer; }
+    button:disabled { opacity: 0.48; cursor: not-allowed; }
     button.secondary { background: #d8c3a5; color: #2f2a24; }
     button.ghost { background: #e9e1d4; color: #2f2a24; }
+    .language-toggle { position: fixed; top: 12px; right: 12px; z-index: 10; min-width: 96px; background: #132a35; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16); }
     .busy { background: #fff; border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; border-left: 4px solid #0f4c5c; }
     .busy-row { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; }
     .busy-bar { height: 4px; overflow: hidden; border-radius: 999px; background: #e9e1d4; margin-top: 8px; }
@@ -869,7 +1016,11 @@ class EmailAnalysisApp {
     .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
     label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #41515a; }
     input, select { border: 1px solid #d8c3a5; border-radius: 6px; padding: 6px 8px; background: #fffdf8; color: #1b2a34; }
-    .meta { background: #fff; border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; }
+    .meta { background: #fff; border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; border-left: 5px solid #0f4c5c; box-shadow: 0 1px 0 rgba(0, 0, 0, 0.05); }
+    .meta-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+    .meta-item { min-width: 0; }
+    .meta-label { display: block; color: #5c6870; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+    .meta-value { display: block; color: #132a35; font-size: 15px; font-weight: 700; overflow-wrap: anywhere; margin-top: 2px; }
     .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
     .stat { background: #fff; padding: 10px; border-radius: 10px; }
     .stat .value { font-size: 22px; font-weight: 700; }
@@ -887,21 +1038,29 @@ class EmailAnalysisApp {
   </style>
 </head>
 <body>
+  <button class="language-toggle" id="outputLanguage" type="button" value="${escapeAttr(locale)}" onclick="toggleLanguage()">${escapeHtml(locale === "en-US" ? labels.settings.enOption : labels.settings.zhOption)}</button>
   <div class="toolbar">
-    <button onclick="post('pullMail')">${escapeHtml(labels.toolbar.pullMail)}</button>
-    <button onclick="post('sampleDigest')">${escapeHtml(labels.toolbar.sample)}</button>
-    <button onclick="post('analyze')">${escapeHtml(labels.toolbar.analyze)}</button>
-    <button onclick="analyzeSelected()">${escapeHtml(labels.toolbar.analyzeSelected)}</button>
-    <button onclick="post('analyzeAllAllowed')">${escapeHtml(labels.toolbar.analyzeAllAllowed)}</button>
-    <button onclick="post('refresh')">${escapeHtml(labels.toolbar.refresh)}</button>
-    <button class="secondary" onclick="post('openDigest')">${escapeHtml(labels.toolbar.openDigest)}</button>
-    <button class="secondary" onclick="post('openSummary')">${escapeHtml(labels.toolbar.openSummary)}</button>
-    <button class="ghost" onclick="post('openSettings')">${escapeHtml(labels.toolbar.settingsFile)}</button>
-    <button class="ghost" onclick="post('openPromptConfig')">${escapeHtml(labels.toolbar.promptConfig)}</button>
-    <button class="ghost" onclick="post('clearLocalCache')">${escapeHtml(labels.toolbar.clearStore)}</button>
+    <div class="toolbar-group">
+      <button onclick="post('pullMail')">${escapeHtml(labels.toolbar.pullMail)}</button>
+      <button onclick="post('loadMore')"${loadMoreDisabled}>${escapeHtml(labels.toolbar.loadMore)}</button>
+      <button onclick="post('sampleDigest')">${escapeHtml(labels.toolbar.sample)}</button>
+      <button onclick="post('analyze')"${analysisDisabled}>${escapeHtml(labels.toolbar.analyze)}</button>
+      <button onclick="analyzeSelected()"${analysisDisabled}>${escapeHtml(labels.toolbar.analyzeSelected)}</button>
+      <button onclick="post('analyzeAllAllowed')"${analysisDisabled}>${escapeHtml(labels.toolbar.analyzeAllAllowed)}</button>
+      <button onclick="post('refresh')">${escapeHtml(labels.toolbar.refresh)}</button>
+    </div>
+    <div class="toolbar-group">
+      <button class="secondary" onclick="post('openDigest')">${escapeHtml(labels.toolbar.openDigest)}</button>
+      <button class="secondary" onclick="post('openSummary')">${escapeHtml(labels.toolbar.openSummary)}</button>
+    </div>
+    <div class="toolbar-group">
+      <button class="ghost" onclick="post('openSettings')">${escapeHtml(labels.toolbar.settingsFile)}</button>
+      <button class="ghost" onclick="post('openPromptConfig')">${escapeHtml(labels.toolbar.promptConfig)}</button>
+      <button class="ghost" onclick="post('clearLocalCache')">${escapeHtml(labels.toolbar.clearStore)}</button>
+    </div>
   </div>
   ${busyHtml}
-  <details class="settings">
+  <details class="settings" id="settingsPanel">
     <summary>${escapeHtml(labels.settings.title)}</summary>
     <div class="settings-body">
       <div class="grid">
@@ -911,45 +1070,19 @@ class EmailAnalysisApp {
           <option value="maxItems" ${selected(config.rangeMode, "maxItems")}>${escapeHtml(labels.settings.maxItemsOption)}</option>
         </select>
       </label>
-      <label>${escapeHtml(labels.settings.output)}
-        <select id="outputLanguage">
-          <option value="zh-CN" ${selected(config.outputLanguage, "zh-CN")}>${escapeHtml(labels.settings.zhOption)}</option>
-          <option value="en-US" ${selected(config.outputLanguage, "en-US")}>${escapeHtml(labels.settings.enOption)}</option>
-        </select>
-      </label>
-      <label>${escapeHtml(labels.settings.recentHours)}
-        <input id="recentHours" type="number" min="1" value="${escapeAttr(String(config.recentHours || 24))}" />
-      </label>
-      <label>${escapeHtml(labels.settings.maxItems)}
-        <input id="maxItems" type="number" min="1" value="${escapeAttr(String(config.maxItems || 50))}" />
-      </label>
+      ${renderRangeValueControl(config, labels)}
       <label>${escapeHtml(labels.settings.folders)}
         <input id="folders" value="${escapeAttr(Array.isArray(config.folders) ? config.folders.join(";") : "Inbox")}" />
       </label>
-      <label>${escapeHtml(labels.settings.bodyChars)}
-        <input id="bodyExcerptChars" type="number" min="100" value="${escapeAttr(String(config.bodyExcerptChars || 1200))}" />
-        <span class="help">${escapeHtml(labels.settings.bodyCharsHelp)}</span>
-      </label>
       <label>${escapeHtml(labels.settings.modelFamily)}
-        <input id="modelFamily" value="${escapeAttr(String(config.modelFamily || "gpt-5.4"))}" />
-      </label>
-      <label>${escapeHtml(labels.settings.batchSize)}
-        <input id="analysisBatchSize" type="number" min="1" value="${escapeAttr(String(config.analysisBatchSize || 5))}" />
+        <select id="modelFamily">
+          ${modelOptions}
+        </select>
       </label>
       <label>${escapeHtml(labels.settings.maxClassification)}
-        <input id="autoAnalyzeMaxClassificationLevel" type="number" min="0" max="3" value="${escapeAttr(String(config.autoAnalyzeMaxClassificationLevel || 2))}" />
-      </label>
-      <label>${escapeHtml(labels.settings.storeRetentionDays)}
-        <input id="mailStoreRetentionDays" type="number" min="1" value="${escapeAttr(String(config.mailStoreRetentionDays || 1))}" />
-      </label>
-      <label>${escapeHtml(labels.settings.indexRetentionDays)}
-        <input id="mailIndexRetentionDays" type="number" min="1" value="${escapeAttr(String(config.mailIndexRetentionDays || 7))}" />
-      </label>
-      <label>${escapeHtml(labels.settings.analysisRetentionDays)}
-        <input id="analysisRetentionDays" type="number" min="1" value="${escapeAttr(String(config.analysisRetentionDays || 7))}" />
-      </label>
-      <label>${escapeHtml(labels.settings.importantSenders)}
-        <input id="importantSenders" value="${escapeAttr(Array.isArray(config.importantSenders) ? config.importantSenders.join(";") : "")}" />
+        <select id="autoAnalyzeMaxClassificationLevel">
+          ${renderClassificationOptions(Number(config.autoAnalyzeMaxClassificationLevel ?? 2), labels)}
+        </select>
       </label>
       <label>${escapeHtml(labels.settings.autoAnalyze)}
         <select id="autoAnalyzeEnabled">
@@ -964,12 +1097,13 @@ class EmailAnalysisApp {
     </div>
   </details>
   <div class="meta">
-    <div><strong>${escapeHtml(labels.meta.range)}:</strong> ${escapeHtml(digestMeta.rangeMode || "-")} / ${escapeHtml(String(digestMeta.recentHours || "-"))}h</div>
-    <div><strong>${escapeHtml(labels.meta.folders)}:</strong> ${escapeHtml((digestMeta.folders || []).join(", ") || "-")}</div>
-    <div><strong>${escapeHtml(labels.meta.generated)}:</strong> ${escapeHtml(digestMeta.generatedAt || "-")}</div>
-    <div><strong>${escapeHtml(labels.meta.lastPull)}:</strong> ${escapeHtml(store.lastPullAt || "-")}</div>
-    <div><strong>${escapeHtml(labels.meta.requestedModel)}:</strong> ${escapeHtml(String(config.modelFamily || "gpt-5.4"))}</div>
-    <div><strong>${escapeHtml(labels.meta.lastUsedModel)}:</strong> ${escapeHtml(formatModelInfo(modelInfo, labels))}</div>
+    <div class="meta-grid">
+      <div class="meta-item"><span class="meta-label">${escapeHtml(labels.meta.range)}</span><span class="meta-value">${escapeHtml(formatRangeMeta(digestMeta, labels))}</span></div>
+      <div class="meta-item"><span class="meta-label">${escapeHtml(labels.meta.folders)}</span><span class="meta-value">${escapeHtml((digestMeta.folders || []).join(", ") || "-")}</span></div>
+      <div class="meta-item"><span class="meta-label">${escapeHtml(labels.meta.generated)}</span><span class="meta-value">${escapeHtml(digestMeta.generatedAt || "-")}</span></div>
+      <div class="meta-item"><span class="meta-label">${escapeHtml(labels.meta.lastPull)}</span><span class="meta-value">${escapeHtml(store.lastPullAt || "-")}</span></div>
+      <div class="meta-item"><span class="meta-label">${escapeHtml(labels.meta.requestedModel)}</span><span class="meta-value">${escapeHtml(formatSelectedModel(config.modelFamily, availableModels))}</span></div>
+    </div>
   </div>
   <div class="stats">
     ${renderStat(labels.stats.pulled, index.items.length)}
@@ -982,30 +1116,47 @@ class EmailAnalysisApp {
     ${renderStat(labels.stats.notice, state.overview.notices)}
   </div>
   ${pendingHtml}
+  ${mustHandleHtml}
   ${blockedHtml}
   ${rows}
   <script>
     const vscode = acquireVsCodeApi();
+    const previousState = vscode.getState() || {};
+    const settingsPanel = document.getElementById('settingsPanel');
+    if (previousState.settingsOpen) {
+      settingsPanel.open = true;
+    }
+    settingsPanel.addEventListener('toggle', () => {
+      vscode.setState(Object.assign({}, vscode.getState() || {}, { settingsOpen: settingsPanel.open }));
+    });
+    document.getElementById('rangeMode').addEventListener('change', () => {
+      post('saveConfig', { config: { rangeMode: document.getElementById('rangeMode').value } });
+    });
+    document.getElementById('modelFamily').addEventListener('change', () => saveConfig());
     function post(type, extra) { vscode.postMessage(Object.assign({ type }, extra || {})); }
     function saveConfig() {
+      const rangeMode = document.getElementById('rangeMode').value;
+      const rangeValue = document.getElementById('rangeValue');
       post('saveConfig', {
         config: {
-          rangeMode: document.getElementById('rangeMode').value,
+          rangeMode,
           outputLanguage: document.getElementById('outputLanguage').value,
-          recentHours: document.getElementById('recentHours').value,
-          maxItems: document.getElementById('maxItems').value,
+          recentHours: rangeMode === 'recentHours' ? rangeValue.value : undefined,
+          maxItems: rangeMode === 'maxItems' ? rangeValue.value : undefined,
           folders: document.getElementById('folders').value,
-          bodyExcerptChars: document.getElementById('bodyExcerptChars').value,
           modelFamily: document.getElementById('modelFamily').value,
-          analysisBatchSize: document.getElementById('analysisBatchSize').value,
           autoAnalyzeEnabled: document.getElementById('autoAnalyzeEnabled').value,
-          autoAnalyzeMaxClassificationLevel: document.getElementById('autoAnalyzeMaxClassificationLevel').value,
-          mailStoreRetentionDays: document.getElementById('mailStoreRetentionDays').value,
-          mailIndexRetentionDays: document.getElementById('mailIndexRetentionDays').value,
-          analysisRetentionDays: document.getElementById('analysisRetentionDays').value,
-          importantSenders: document.getElementById('importantSenders').value
+          autoAnalyzeMaxClassificationLevel: document.getElementById('autoAnalyzeMaxClassificationLevel').value
         }
       });
+    }
+    function toggleLanguage() {
+      vscode.setState(Object.assign({}, vscode.getState() || {}, { settingsOpen: true }));
+      const button = document.getElementById('outputLanguage');
+      const next = button.value === 'en-US' ? 'zh-CN' : 'en-US';
+      button.value = next;
+      button.textContent = next === 'en-US' ? 'English' : '简体中文';
+      post('saveConfig', { config: { outputLanguage: next } });
     }
     function analyzeSelected() {
       const checked = Array.from(document.querySelectorAll('input[data-mail-id]:checked')).map((input) => input.getAttribute('data-mail-id'));
@@ -1081,6 +1232,103 @@ function renderPendingPanel(
   return `<details class="category"${blocked ? "" : " open"}><summary>${escapeHtml(title)} (${items.length})</summary><div class="category-body">${cards}</div></details>`;
 }
 
+function renderModelOptions(
+  models: AvailableModel[],
+  selectedValue: string,
+  labels: DashboardLabels
+): string {
+  if (!models.length) {
+    return `<option value="">${escapeHtml(labels.settings.noModel)}</option>`;
+  }
+  const uniqueModels = [...new Map(models.map((model) => [modelKey(model), model])).values()];
+  const options = uniqueModels.map((model) => {
+    const value = model.id || model.family;
+    return `<option value="${escapeAttr(value)}" ${isSelectedModel(model, selectedValue) ? "selected" : ""}>${escapeHtml(formatModelLabel(model))}</option>`;
+  });
+  if (!selectedValue || !uniqueModels.some((model) => isSelectedModel(model, selectedValue))) {
+    options.unshift(`<option value="" selected>${escapeHtml(labels.settings.noModel)}</option>`);
+  }
+  return options.join("");
+}
+
+function renderRangeValueControl(config: Record<string, unknown>, labels: DashboardLabels): string {
+  const rangeMode = config.rangeMode === "maxItems" ? "maxItems" : "recentHours";
+  const label = rangeMode === "maxItems" ? labels.settings.maxItems : labels.settings.recentHours;
+  const value = rangeMode === "maxItems" ? String(config.maxItems || 50) : String(config.recentHours || 24);
+  return `<label>${escapeHtml(label)}
+        <input id="rangeValue" type="number" min="1" value="${escapeAttr(value)}" />
+      </label>`;
+}
+
+function formatRangeMeta(metadata: { rangeMode?: unknown; recentHours?: unknown; maxItems?: unknown }, labels: DashboardLabels): string {
+  const mode = String(metadata.rangeMode || "");
+  if (mode.toLowerCase() === "maxitems") {
+    return `${labels.settings.maxItemsOption} / ${String(metadata.maxItems || "-")}`;
+  }
+  if (mode.toLowerCase() === "recenthours") {
+    return `${labels.settings.recentHoursOption} / ${String(metadata.recentHours || "-")}h`;
+  }
+  return "-";
+}
+
+function modelToAvailableModel(model: { id: string; family: string; name: string; vendor: string }): AvailableModel {
+  return {
+    id: String(model.id || ""),
+    family: String(model.family || ""),
+    name: String(model.name || ""),
+    vendor: String(model.vendor || "")
+  };
+}
+
+function selectConfiguredModel(models: AvailableModel[], selectedValue: string): AvailableModel | undefined {
+  const index = selectConfiguredModelIndex(models, selectedValue);
+  return index >= 0 ? models[index] : undefined;
+}
+
+function selectConfiguredModelIndex(models: AvailableModel[], selectedValue: string): number {
+  const selected = String(selectedValue || "").trim();
+  if (!selected) {
+    return -1;
+  }
+  return models.findIndex((model) => isSelectedModel(model, selected));
+}
+
+function isSelectedModel(model: AvailableModel, selectedValue: string): boolean {
+  const selected = String(selectedValue || "").trim().toLowerCase();
+  return [model.id, model.family, model.name, model.vendor, formatModelLabel(model)]
+    .map((value) => String(value || "").trim().toLowerCase())
+    .includes(selected);
+}
+
+function formatSelectedModel(selectedValue: unknown, models: AvailableModel[]): string {
+  const selected = String(selectedValue || "");
+  const model = selectConfiguredModel(models, selected) as AvailableModel | undefined;
+  return model ? formatModelLabel(model) : selected || "-";
+}
+
+function formatModelLabel(model: AvailableModel): string {
+  return [model.vendor, model.family, model.id, model.name]
+    .filter(Boolean)
+    .filter((value, index, values) => values.indexOf(value) === index)
+    .join(" / ");
+}
+
+function modelKey(model: AvailableModel): string {
+  return [model.vendor, model.family, model.id, model.name].join("\u0000");
+}
+
+function renderClassificationOptions(selectedLevel: number, labels: DashboardLabels): string {
+  const options = [
+    [0, labels.settings.classificationPublic],
+    [1, labels.settings.classificationInternal],
+    [2, labels.settings.classificationRegistered],
+    [3, labels.settings.classificationHighRegistered]
+  ] as const;
+  return options.map(([level, label]) => {
+    return `<option value="${level}" ${selected(selectedLevel, level)}>${escapeHtml(label)}</option>`;
+  }).join("");
+}
+
 function renderCard(item: AnalysisResult["items"][number], labels: DashboardLabels): string {
   const draftReplyLiteral = toJsLiteral(item.draftReply || "");
   const mailIdLiteral = toJsLiteral(item.mailId);
@@ -1122,8 +1370,15 @@ async function readResponseText(stream: AsyncIterable<unknown>): Promise<string>
   return full;
 }
 
-function runProcess(command: string, args: string[], timeoutMs = 30000): Promise<void> {
+function runProcess(
+  command: string,
+  args: string[],
+  timeoutMs = 30000,
+  onEvent?: (event: string, data: Record<string, unknown>) => void
+): Promise<void> {
   return new Promise((resolve, reject) => {
+    const startedAt = Date.now();
+    onEvent?.("start", { command, args: sanitizeProcessArgs(args), timeoutMs });
     const child = cp.spawn(command, args, { windowsHide: true });
     let stdout = "";
     let stderr = "";
@@ -1134,6 +1389,7 @@ function runProcess(command: string, args: string[], timeoutMs = 30000): Promise
       }
       settled = true;
       child.kill();
+      onEvent?.("timeout", { command, elapsedMs: Date.now() - startedAt, stdoutLength: stdout.length, stderrLength: stderr.length });
       reject(new Error(`${command} timed out after ${String(timeoutMs)}ms. ${stderr || stdout}`.trim()));
     }, timeoutMs);
     child.stdout.on("data", (chunk: Buffer) => {
@@ -1148,6 +1404,7 @@ function runProcess(command: string, args: string[], timeoutMs = 30000): Promise
       }
       settled = true;
       clearTimeout(timeout);
+      onEvent?.("error", { command, elapsedMs: Date.now() - startedAt, error: formatError(error), stdoutLength: stdout.length, stderrLength: stderr.length });
       reject(error);
     });
     child.on("close", (code) => {
@@ -1156,6 +1413,7 @@ function runProcess(command: string, args: string[], timeoutMs = 30000): Promise
       }
       settled = true;
       clearTimeout(timeout);
+      onEvent?.("close", { command, code, elapsedMs: Date.now() - startedAt, stdoutLength: stdout.length, stderrLength: stderr.length });
       if (code === 0) {
         resolve();
       } else {
@@ -1182,8 +1440,15 @@ function selected(current: unknown, expected: unknown): string {
   return String(current ?? "") === String(expected) ? "selected" : "";
 }
 
+function serializeFolderDateMap(values: Record<string, string>): string {
+  return Object.entries(values)
+    .filter(([, value]) => value)
+    .map(([folder, value]) => `${folder.replace(/[=;]/g, " ").trim()}=${value.replace(/;/g, " ").trim()}`)
+    .join(";");
+}
+
 function getLocaleFromConfig(config: Record<string, unknown>): Locale {
-  return config.outputLanguage === "en-US" ? "en-US" : "zh-CN";
+  return config.outputLanguage === "zh-CN" ? "zh-CN" : "en-US";
 }
 
 function getLabels(locale: Locale): DashboardLabels {
@@ -1284,4 +1549,17 @@ function toJsLiteral(value: string): string {
     .replace(/</g, "\\u003c")
     .replace(/>/g, "\\u003e")
     .replace(/'/g, "\\u0027");
+}
+
+function formatError(error: unknown): string {
+  return error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+}
+
+function sanitizeProcessArgs(args: string[]): string[] {
+  return args.map((arg) => {
+    if (arg.length > 180) {
+      return `${arg.slice(0, 180)}...`;
+    }
+    return arg;
+  });
 }
