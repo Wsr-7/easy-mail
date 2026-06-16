@@ -7,14 +7,179 @@ import { normalizeAnalysis, parseAnalysisJson, type AnalysisResult } from "./lib
 import { buildSummaryMarkdown } from "./lib/summary";
 import { buildDashboardState, CATEGORY_ORDER, type DashboardState } from "./lib/dashboard-state";
 
-const CATEGORY_TITLES: Record<string, string> = {
-  mustHandleToday: "Must Handle Today",
-  risk: "Risk",
-  waitingForMe: "Waiting For Me",
-  followUp: "Follow-up",
-  notice: "Notice",
-  ignored: "Ignored",
-  uncertain: "Uncertain"
+type Locale = "zh-CN" | "en-US";
+
+type BusyState = {
+  label: string;
+  detail: string;
+  startedAt: string;
+};
+
+type DashboardLabels = {
+  toolbar: Record<"pullMail" | "sample" | "analyze" | "refresh" | "openDigest" | "openSummary" | "settingsFile", string>;
+  settings: {
+    title: string;
+    range: string;
+    output: string;
+    recentHours: string;
+    maxItems: string;
+    folders: string;
+    bodyChars: string;
+    bodyCharsHelp: string;
+    modelFamily: string;
+    save: string;
+    recentHoursOption: string;
+    maxItemsOption: string;
+    zhOption: string;
+    enOption: string;
+  };
+  meta: Record<"range" | "folders" | "generated" | "requestedModel" | "lastUsedModel", string>;
+  stats: Record<"mustHandle" | "risk" | "waiting" | "notice", string>;
+  categories: Record<string, string>;
+  card: Record<"from" | "received" | "summary" | "reason" | "suggestedAction" | "copyDraft" | "ignore" | "noItems", string>;
+  progress: Record<"pullMail" | "sampleDigest" | "analyze", string> & { detail: string };
+  model: Record<"fallback" | "preferred", string>;
+};
+
+const LABELS: Record<Locale, DashboardLabels> = {
+  "zh-CN": {
+    toolbar: {
+      pullMail: "拉取邮件",
+      sample: "示例数据",
+      analyze: "分析",
+      refresh: "刷新",
+      openDigest: "打开邮件摘要",
+      openSummary: "打开分析总结",
+      settingsFile: "配置文件"
+    },
+    settings: {
+      title: "设置",
+      range: "范围",
+      output: "语言",
+      recentHours: "最近小时数",
+      maxItems: "最多邮件数",
+      folders: "文件夹（用 ; 分隔）",
+      bodyChars: "正文截断字符数",
+      bodyCharsHelp: "限制每封邮件送给 Copilot 的正文长度，避免分析过慢或上下文过大。",
+      modelFamily: "请求模型",
+      save: "保存设置",
+      recentHoursOption: "最近小时数",
+      maxItemsOption: "最多邮件数",
+      zhOption: "中文界面和中文分析",
+      enOption: "English UI and analysis"
+    },
+    meta: {
+      range: "范围",
+      folders: "文件夹",
+      generated: "生成时间",
+      requestedModel: "请求模型",
+      lastUsedModel: "上次使用模型"
+    },
+    stats: {
+      mustHandle: "必须处理",
+      risk: "风险",
+      waiting: "等待回复",
+      notice: "通知"
+    },
+    categories: {
+      mustHandleToday: "今天必须处理",
+      risk: "风险邮件",
+      waitingForMe: "等待我回复",
+      followUp: "需要跟进",
+      notice: "普通通知",
+      ignored: "已忽略",
+      uncertain: "不确定"
+    },
+    card: {
+      from: "发件人",
+      received: "收到时间",
+      summary: "摘要",
+      reason: "判断原因",
+      suggestedAction: "建议动作",
+      copyDraft: "复制回复草稿",
+      ignore: "忽略",
+      noItems: "暂无邮件"
+    },
+    progress: {
+      pullMail: "正在拉取邮件",
+      sampleDigest: "正在生成示例数据",
+      analyze: "正在调用 Copilot 分析",
+      detail: "任务进行中，请稍候..."
+    },
+    model: {
+      fallback: "回退模型",
+      preferred: "首选模型"
+    }
+  },
+  "en-US": {
+    toolbar: {
+      pullMail: "Pull Mail",
+      sample: "Sample",
+      analyze: "Analyze",
+      refresh: "Refresh",
+      openDigest: "Open Digest",
+      openSummary: "Open Summary",
+      settingsFile: "Settings File"
+    },
+    settings: {
+      title: "Settings",
+      range: "Range",
+      output: "Language",
+      recentHours: "Recent Hours",
+      maxItems: "Max Items",
+      folders: "Folders (; separated)",
+      bodyChars: "Body Chars",
+      bodyCharsHelp: "Limits how many body characters per email are sent to Copilot.",
+      modelFamily: "Requested Model",
+      save: "Save Settings",
+      recentHoursOption: "Recent Hours",
+      maxItemsOption: "Max Items",
+      zhOption: "中文界面和中文分析",
+      enOption: "English UI and analysis"
+    },
+    meta: {
+      range: "Range",
+      folders: "Folders",
+      generated: "Generated",
+      requestedModel: "Requested model",
+      lastUsedModel: "Last used model"
+    },
+    stats: {
+      mustHandle: "Must Handle",
+      risk: "Risk",
+      waiting: "Waiting",
+      notice: "Notice"
+    },
+    categories: {
+      mustHandleToday: "Must Handle Today",
+      risk: "Risk",
+      waitingForMe: "Waiting For Me",
+      followUp: "Follow-up",
+      notice: "Notice",
+      ignored: "Ignored",
+      uncertain: "Uncertain"
+    },
+    card: {
+      from: "From",
+      received: "Received",
+      summary: "Summary",
+      reason: "Reason",
+      suggestedAction: "Suggested Action",
+      copyDraft: "Copy Draft",
+      ignore: "Ignore",
+      noItems: "No items"
+    },
+    progress: {
+      pullMail: "Pulling mail",
+      sampleDigest: "Generating sample digest",
+      analyze: "Analyzing with Copilot",
+      detail: "Task is running. Please wait..."
+    },
+    model: {
+      fallback: "fallback",
+      preferred: "preferred"
+    }
+  }
 };
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -37,6 +202,7 @@ export function deactivate(): void {}
 
 class EmailAnalysisApp {
   public readonly dashboardProvider: DashboardProvider;
+  private busy: BusyState | null = null;
 
   public constructor(private readonly context: vscode.ExtensionContext) {
     this.dashboardProvider = new DashboardProvider(() => this.getDashboardHtml(), (message) => this.handleMessage(message));
@@ -49,6 +215,14 @@ class EmailAnalysisApp {
   }
 
   public async pullMail(forceSample: boolean): Promise<void> {
+    const locale = await this.readLocale();
+    const labels = getLabels(locale);
+    await this.runWithBusy(forceSample ? labels.progress.sampleDigest : labels.progress.pullMail, labels.progress.detail, async () => {
+      await this.pullMailCore(forceSample);
+    });
+  }
+
+  private async pullMailCore(forceSample: boolean): Promise<void> {
     const config = await this.readConfig();
     await fs.promises.mkdir(this.getDataDir(), { recursive: true });
     const scriptPath = await this.findCollectorScript();
@@ -71,6 +245,14 @@ class EmailAnalysisApp {
   }
 
   public async analyze(): Promise<void> {
+    const locale = await this.readLocale();
+    const labels = getLabels(locale);
+    await this.runWithBusy(labels.progress.analyze, labels.progress.detail, async () => {
+      await this.analyzeCore();
+    });
+  }
+
+  private async analyzeCore(): Promise<void> {
     if (!fs.existsSync(this.getDigestPath())) {
       throw new Error("Digest file does not exist. Run Pull Mail first.");
     }
@@ -112,6 +294,23 @@ class EmailAnalysisApp {
     await fs.promises.writeFile(this.getSummaryPath(), buildSummaryMarkdown(normalized), "utf8");
     await this.refresh();
     await vscode.window.showInformationMessage("Email analysis completed.");
+  }
+
+  private async runWithBusy<T>(label: string, detail: string, task: () => Promise<T>): Promise<T> {
+    this.busy = { label, detail, startedAt: new Date().toISOString() };
+    await this.refresh();
+    try {
+      return await vscode.window.withProgress(
+        { location: vscode.ProgressLocation.Notification, title: label, cancellable: false },
+        async (progress) => {
+          progress.report({ message: detail });
+          return await task();
+        }
+      );
+    } finally {
+      this.busy = null;
+      await this.refresh();
+    }
   }
 
   public async refresh(): Promise<void> {
@@ -170,6 +369,14 @@ class EmailAnalysisApp {
     await this.ensureConfig();
     const raw = await fs.promises.readFile(this.getConfigPath(), "utf8");
     return JSON.parse(raw);
+  }
+
+  private async readLocale(): Promise<Locale> {
+    try {
+      return getLocaleFromConfig(await this.readConfig());
+    } catch {
+      return "zh-CN";
+    }
   }
 
   private async writeConfig(config: Record<string, any>): Promise<void> {
@@ -317,10 +524,15 @@ class EmailAnalysisApp {
 
   private async getDashboardHtml(): Promise<string> {
     const state = await this.loadState();
-    const rows = CATEGORY_ORDER.map((category) => renderCategory(category, state.categories.find((entry) => entry.id === category)?.items || [])).join("");
     const digestMeta = state.digestMetadata || {};
     const modelInfo = (state as DashboardState & { modelInfo?: Record<string, unknown> }).modelInfo || {};
     const config = state.config as Record<string, unknown>;
+    const locale = getLocaleFromConfig(config);
+    const labels = getLabels(locale);
+    const rows = CATEGORY_ORDER.map((category) => renderCategory(category, state.categories.find((entry) => entry.id === category)?.items || [], labels)).join("");
+    const busyHtml = this.busy
+      ? `<div class="busy"><div class="busy-row"><strong>${escapeHtml(this.busy.label)}</strong><span>${escapeHtml(this.busy.detail)}</span></div><div class="busy-bar"><span></span></div></div>`
+      : "";
 
     return `<!doctype html>
 <html>
@@ -333,7 +545,15 @@ class EmailAnalysisApp {
     button { border: 0; border-radius: 8px; padding: 8px 12px; background: #0f4c5c; color: #fff; cursor: pointer; }
     button.secondary { background: #d8c3a5; color: #2f2a24; }
     button.ghost { background: #e9e1d4; color: #2f2a24; }
-    .settings { background: #fff; border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; }
+    .busy { background: #fff; border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; border-left: 4px solid #0f4c5c; }
+    .busy-row { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; }
+    .busy-bar { height: 4px; overflow: hidden; border-radius: 999px; background: #e9e1d4; margin-top: 8px; }
+    .busy-bar span { display: block; width: 45%; height: 100%; border-radius: 999px; background: #0f4c5c; animation: loading 1.2s ease-in-out infinite; }
+    @keyframes loading { 0% { transform: translateX(-110%); } 100% { transform: translateX(230%); } }
+    .settings { background: #fff; border-radius: 10px; padding: 8px 12px; margin-bottom: 12px; }
+    .settings summary { cursor: pointer; font-weight: 700; }
+    .settings .settings-body { margin-top: 10px; }
+    .help { color: #6d6d6d; font-size: 11px; line-height: 1.35; }
     .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
     label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #41515a; }
     input, select { border: 1px solid #d8c3a5; border-radius: 6px; padding: 6px 8px; background: #fffdf8; color: #1b2a34; }
@@ -356,60 +576,65 @@ class EmailAnalysisApp {
 </head>
 <body>
   <div class="toolbar">
-    <button onclick="post('pullMail')">Pull Mail</button>
-    <button onclick="post('sampleDigest')">Sample</button>
-    <button onclick="post('analyze')">Analyze</button>
-    <button onclick="post('refresh')">Refresh</button>
-    <button class="secondary" onclick="post('openDigest')">Open Digest</button>
-    <button class="secondary" onclick="post('openSummary')">Open Summary</button>
-    <button class="ghost" onclick="post('openSettings')">Settings File</button>
+    <button onclick="post('pullMail')">${escapeHtml(labels.toolbar.pullMail)}</button>
+    <button onclick="post('sampleDigest')">${escapeHtml(labels.toolbar.sample)}</button>
+    <button onclick="post('analyze')">${escapeHtml(labels.toolbar.analyze)}</button>
+    <button onclick="post('refresh')">${escapeHtml(labels.toolbar.refresh)}</button>
+    <button class="secondary" onclick="post('openDigest')">${escapeHtml(labels.toolbar.openDigest)}</button>
+    <button class="secondary" onclick="post('openSummary')">${escapeHtml(labels.toolbar.openSummary)}</button>
+    <button class="ghost" onclick="post('openSettings')">${escapeHtml(labels.toolbar.settingsFile)}</button>
   </div>
-  <div class="settings">
-    <div class="grid">
-      <label>Range
+  ${busyHtml}
+  <details class="settings">
+    <summary>${escapeHtml(labels.settings.title)}</summary>
+    <div class="settings-body">
+      <div class="grid">
+      <label>${escapeHtml(labels.settings.range)}
         <select id="rangeMode">
-          <option value="recentHours" ${selected(config.rangeMode, "recentHours")}>Recent Hours</option>
-          <option value="maxItems" ${selected(config.rangeMode, "maxItems")}>Max Items</option>
+          <option value="recentHours" ${selected(config.rangeMode, "recentHours")}>${escapeHtml(labels.settings.recentHoursOption)}</option>
+          <option value="maxItems" ${selected(config.rangeMode, "maxItems")}>${escapeHtml(labels.settings.maxItemsOption)}</option>
         </select>
       </label>
-      <label>Output
+      <label>${escapeHtml(labels.settings.output)}
         <select id="outputLanguage">
-          <option value="zh-CN" ${selected(config.outputLanguage, "zh-CN")}>中文分析</option>
-          <option value="en-US" ${selected(config.outputLanguage, "en-US")}>English analysis</option>
+          <option value="zh-CN" ${selected(config.outputLanguage, "zh-CN")}>${escapeHtml(labels.settings.zhOption)}</option>
+          <option value="en-US" ${selected(config.outputLanguage, "en-US")}>${escapeHtml(labels.settings.enOption)}</option>
         </select>
       </label>
-      <label>Recent Hours
+      <label>${escapeHtml(labels.settings.recentHours)}
         <input id="recentHours" type="number" min="1" value="${escapeAttr(String(config.recentHours || 24))}" />
       </label>
-      <label>Max Items
+      <label>${escapeHtml(labels.settings.maxItems)}
         <input id="maxItems" type="number" min="1" value="${escapeAttr(String(config.maxItems || 50))}" />
       </label>
-      <label>Folders (; separated)
+      <label>${escapeHtml(labels.settings.folders)}
         <input id="folders" value="${escapeAttr(Array.isArray(config.folders) ? config.folders.join(";") : "Inbox")}" />
       </label>
-      <label>Body Chars
+      <label>${escapeHtml(labels.settings.bodyChars)}
         <input id="bodyExcerptChars" type="number" min="100" value="${escapeAttr(String(config.bodyExcerptChars || 1200))}" />
+        <span class="help">${escapeHtml(labels.settings.bodyCharsHelp)}</span>
       </label>
-      <label>Model Family
+      <label>${escapeHtml(labels.settings.modelFamily)}
         <input id="modelFamily" value="${escapeAttr(String(config.modelFamily || "gpt-5.4"))}" />
       </label>
+      </div>
+      <div class="toolbar" style="margin: 10px 0 0">
+        <button class="secondary" onclick="saveConfig()">${escapeHtml(labels.settings.save)}</button>
+      </div>
     </div>
-    <div class="toolbar" style="margin: 10px 0 0">
-      <button class="secondary" onclick="saveConfig()">Save Settings</button>
-    </div>
-  </div>
+  </details>
   <div class="meta">
-    <div><strong>Range:</strong> ${escapeHtml(digestMeta.rangeMode || "-")} / ${escapeHtml(String(digestMeta.recentHours || "-"))}h</div>
-    <div><strong>Folders:</strong> ${escapeHtml((digestMeta.folders || []).join(", ") || "-")}</div>
-    <div><strong>Generated:</strong> ${escapeHtml(digestMeta.generatedAt || "-")}</div>
-    <div><strong>Requested model:</strong> ${escapeHtml(String(config.modelFamily || "gpt-5.4"))}</div>
-    <div><strong>Last used model:</strong> ${escapeHtml(formatModelInfo(modelInfo))}</div>
+    <div><strong>${escapeHtml(labels.meta.range)}:</strong> ${escapeHtml(digestMeta.rangeMode || "-")} / ${escapeHtml(String(digestMeta.recentHours || "-"))}h</div>
+    <div><strong>${escapeHtml(labels.meta.folders)}:</strong> ${escapeHtml((digestMeta.folders || []).join(", ") || "-")}</div>
+    <div><strong>${escapeHtml(labels.meta.generated)}:</strong> ${escapeHtml(digestMeta.generatedAt || "-")}</div>
+    <div><strong>${escapeHtml(labels.meta.requestedModel)}:</strong> ${escapeHtml(String(config.modelFamily || "gpt-5.4"))}</div>
+    <div><strong>${escapeHtml(labels.meta.lastUsedModel)}:</strong> ${escapeHtml(formatModelInfo(modelInfo, labels))}</div>
   </div>
   <div class="stats">
-    ${renderStat("Must Handle", state.overview.mustHandleToday)}
-    ${renderStat("Risk", state.overview.risks)}
-    ${renderStat("Waiting", state.overview.waitingForMe)}
-    ${renderStat("Notice", state.overview.notices)}
+    ${renderStat(labels.stats.mustHandle, state.overview.mustHandleToday)}
+    ${renderStat(labels.stats.risk, state.overview.risks)}
+    ${renderStat(labels.stats.waiting, state.overview.waitingForMe)}
+    ${renderStat(labels.stats.notice, state.overview.notices)}
   </div>
   ${rows}
   <script>
@@ -446,7 +671,10 @@ class DashboardProvider implements vscode.WebviewViewProvider {
     this.view = webviewView;
     webviewView.webview.options = { enableScripts: true };
     webviewView.webview.onDidReceiveMessage((message) => {
-      void this.onMessage(message);
+      void this.onMessage(message).catch((error: unknown) => {
+        const messageText = error instanceof Error ? error.message : String(error);
+        void vscode.window.showErrorMessage(messageText);
+      });
     });
     return this.update();
   }
@@ -463,29 +691,29 @@ function renderStat(label: string, value: number | undefined): string {
   return `<div class="stat"><div>${escapeHtml(label)}</div><div class="value">${escapeHtml(String(value || 0))}</div></div>`;
 }
 
-function renderCategory(category: string, items: AnalysisResult["items"]): string {
-  const cards = items.length ? items.map(renderCard).join("") : `<div class="empty">No items</div>`;
+function renderCategory(category: string, items: AnalysisResult["items"], labels: DashboardLabels): string {
+  const cards = items.length ? items.map((item) => renderCard(item, labels)).join("") : `<div class="empty">${escapeHtml(labels.card.noItems)}</div>`;
   const open = category === "mustHandleToday" ? " open" : "";
-  return `<details class="category"${open}><summary>${escapeHtml(CATEGORY_TITLES[category] || category)} (${items.length})</summary><div class="category-body">${cards}</div></details>`;
+  return `<details class="category"${open}><summary>${escapeHtml(labels.categories[category] || category)} (${items.length})</summary><div class="category-body">${cards}</div></details>`;
 }
 
-function renderCard(item: AnalysisResult["items"][number]): string {
+function renderCard(item: AnalysisResult["items"][number], labels: DashboardLabels): string {
   const draftReplyLiteral = toJsLiteral(item.draftReply || "");
   const mailIdLiteral = toJsLiteral(item.mailId);
   return `<article class="card">
     <div class="header">
       <div class="title">${escapeHtml(item.subject || item.mailId)}</div>
-      <div class="badge">${escapeHtml(item.priority)}</div>
+      <div class="badge">${escapeHtml(formatPriority(item.priority, labels))}</div>
     </div>
-    <div><strong>From:</strong> ${escapeHtml(item.sender || "-")}</div>
-    <div><strong>Received:</strong> ${escapeHtml(item.receivedTime || "-")}</div>
-    <div><strong>Summary:</strong> ${escapeHtml(item.summary || "-")}</div>
-    <div><strong>Reason:</strong> ${escapeHtml(item.reason || "-")}</div>
-    <div><strong>Suggested Action:</strong> ${escapeHtml(item.suggestedAction || "-")}</div>
+    <div><strong>${escapeHtml(labels.card.from)}:</strong> ${escapeHtml(item.sender || "-")}</div>
+    <div><strong>${escapeHtml(labels.card.received)}:</strong> ${escapeHtml(item.receivedTime || "-")}</div>
+    <div><strong>${escapeHtml(labels.card.summary)}:</strong> ${escapeHtml(item.summary || "-")}</div>
+    <div><strong>${escapeHtml(labels.card.reason)}:</strong> ${escapeHtml(item.reason || "-")}</div>
+    <div><strong>${escapeHtml(labels.card.suggestedAction)}:</strong> ${escapeHtml(item.suggestedAction || "-")}</div>
     <pre>${escapeHtml(item.draftReply || "")}</pre>
     <div class="actions">
-      <button onclick="post('copyDraft', { draftReply: ${draftReplyLiteral} })">Copy Draft</button>
-      <button class="secondary" onclick="post('ignore', { mailId: ${mailIdLiteral} })">Ignore</button>
+      <button onclick="post('copyDraft', { draftReply: ${draftReplyLiteral} })">${escapeHtml(labels.card.copyDraft)}</button>
+      <button class="secondary" onclick="post('ignore', { mailId: ${mailIdLiteral} })">${escapeHtml(labels.card.ignore)}</button>
     </div>
   </article>`;
 }
@@ -545,6 +773,14 @@ function selected(current: unknown, expected: string): string {
   return String(current || "") === expected ? "selected" : "";
 }
 
+function getLocaleFromConfig(config: Record<string, unknown>): Locale {
+  return config.outputLanguage === "en-US" ? "en-US" : "zh-CN";
+}
+
+function getLabels(locale: Locale): DashboardLabels {
+  return LABELS[locale] || LABELS["zh-CN"];
+}
+
 function positiveNumber(value: unknown, fallback: number): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : Number(fallback);
@@ -565,15 +801,31 @@ function createAnalysisPrompt(template: string, digestText: string, outputLangua
   return `${template}\n\nOutput language instruction:\n${languageInstruction}\n\n${digestText}`;
 }
 
-function formatModelInfo(modelInfo: Record<string, unknown>): string {
+function formatModelInfo(modelInfo: Record<string, unknown>, labels: DashboardLabels): string {
   const actualFamily = String(modelInfo.actualFamily || "");
   const actualName = String(modelInfo.actualName || "");
   const actualVendor = String(modelInfo.actualVendor || "");
-  const fallback = modelInfo.usedFallback === true ? "fallback" : "preferred";
+  const fallback = modelInfo.usedFallback === true ? labels.model.fallback : labels.model.preferred;
   if (!actualFamily && !actualName && !actualVendor) {
     return "-";
   }
   return [actualVendor, actualName || actualFamily, fallback].filter(Boolean).join(" / ");
+}
+
+function formatPriority(priority: string, labels: DashboardLabels): string {
+  const normalized = String(priority || "").toLowerCase();
+  if (labels === LABELS["zh-CN"]) {
+    if (normalized === "high") {
+      return "高";
+    }
+    if (normalized === "medium") {
+      return "中";
+    }
+    if (normalized === "low") {
+      return "低";
+    }
+  }
+  return priority || "-";
 }
 
 function toJsLiteral(value: string): string {

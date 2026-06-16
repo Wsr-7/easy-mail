@@ -28,7 +28,8 @@ releases/    打包生成的带版本号 VSIX
 - 支持 `指定一个或多个 Outlook 文件夹`
 - 支持 `sample mode`，无 Outlook 也能演示
 - 支持 `GitHub Copilot` 模型分析，默认优先请求 `gpt-5.4`，不可用时使用 VS Code 当前可用的 Copilot 模型
-- 支持在看板中配置拉取参数、分析语言和模型 family
+- 支持在看板中配置拉取参数、界面/分析语言和模型 family
+- 支持 Pull / Analyze 任务进度提示，避免长任务无反馈
 - 支持可折叠分类面板
 - 生成：
   - `mail-digest.md`
