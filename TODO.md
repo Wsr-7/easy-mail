@@ -8,8 +8,8 @@
 - [x] 编写 VSIX 构建说明。
 - [x] 编写安全与合规边界。
 - [x] 初始化本地 git repo。
-- [ ] 创建 GitHub repo：`Wsr-7/email-analysis`。
-- [ ] 推送 `main` 分支。
+- [x] 创建 GitHub repo：`Wsr-7/email-analysis`。
+- [x] 推送 `main` 分支。
 
 ## POC 实现任务
 
@@ -28,6 +28,4 @@
 
 ## 当前阻塞
 
-- `gh auth status` 显示 `Wsr-7` 当前 token invalid，需要重新认证或让当前 Codex 进程可见有效 `GH_TOKEN` / `GITHUB_TOKEN`。
-- 当前进程、Windows 用户级环境变量、机器级环境变量均未发现 `GH_TOKEN` / `GITHUB_TOKEN`。
-- 已尝试 `gh auth login` 和 `gh auth refresh`，两次都在交互授权阶段超时，尚未完成认证。
+- 无。当前仓库已完成本地初始化、GitHub 仓库创建和 `main` 推送。
