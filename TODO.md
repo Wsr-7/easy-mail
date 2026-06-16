@@ -13,19 +13,20 @@
 
 ## POC 实现任务
 
-- [ ] 实现 `scripts/collect-outlook-mails.vbs`。
-- [ ] 支持最近 N 封邮件采集。
-- [ ] 支持最近 N 小时邮件采集。
-- [ ] 支持指定一个或多个 Outlook 文件夹。
-- [ ] 输出 `data/mail-digest.md`。
-- [ ] 创建 VS Code extension TypeScript 骨架。
-- [ ] 实现 sidebar / dashboard。
-- [ ] 调用 VBScript 生成 digest。
-- [ ] 调用 VS Code Language Model API 使用 GitHub Copilot。
-- [ ] 生成 `data/analysis-result.json`。
-- [ ] 生成 `data/mail-summary.md`。
-- [ ] 打包 `.vsix`。
+- [x] 实现 `scripts/collect-outlook-mails.vbs`。
+- [x] 支持最近 N 封邮件采集。
+- [x] 支持最近 N 小时邮件采集。
+- [x] 支持指定一个或多个 Outlook 文件夹。
+- [x] 输出 `data/mail-digest.md`。
+- [x] 创建 VS Code extension TypeScript 骨架。
+- [x] 实现 sidebar / dashboard。
+- [x] 调用 VBScript 生成 digest。
+- [x] 调用 VS Code Language Model API 使用 GitHub Copilot。
+- [x] 生成 `data/analysis-result.json`。
+- [x] 生成 `data/mail-summary.md`。
+- [x] 打包 `.vsix`。
 
 ## 当前阻塞
 
-- 无。当前仓库已完成本地初始化、GitHub 仓库创建和 `main` 推送。
+- 无代码层阻塞。
+- 仍需在另一台 `Windows + classic Outlook + VS Code + GitHub Copilot` 机器上做真实人工联调。

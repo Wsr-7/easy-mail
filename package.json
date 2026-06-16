@@ -1,0 +1,100 @@
+{
+  "name": "email-analysis-poc",
+  "displayName": "Email Analysis POC",
+  "description": "Local Outlook digest collection, Copilot analysis, and dashboard for classic Outlook.",
+  "version": "0.1.0",
+  "publisher": "Wsr-7",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Wsr-7/email-analysis.git"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:emailAnalysis.pullMail",
+    "onCommand:emailAnalysis.generateSampleDigest",
+    "onCommand:emailAnalysis.analyze",
+    "onView:emailAnalysis.dashboard"
+  ],
+  "main": "./out/extension.js",
+  "files": [
+    "out/**",
+    "scripts/**",
+    "prompts/**",
+    "media/**",
+    "LICENSE",
+    "README.md",
+    "user guide.md",
+    "setup.md",
+    "agents.md",
+    "default-config.json"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "emailAnalysis",
+          "title": "Email Analysis",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "emailAnalysis": [
+        {
+          "type": "webview",
+          "id": "emailAnalysis.dashboard",
+          "name": "Dashboard"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "emailAnalysis.pullMail",
+        "title": "Email Analysis: Pull Mail"
+      },
+      {
+        "command": "emailAnalysis.generateSampleDigest",
+        "title": "Email Analysis: Generate Sample Digest"
+      },
+      {
+        "command": "emailAnalysis.analyze",
+        "title": "Email Analysis: Analyze with Copilot"
+      },
+      {
+        "command": "emailAnalysis.refreshDashboard",
+        "title": "Email Analysis: Refresh Dashboard"
+      },
+      {
+        "command": "emailAnalysis.openDigest",
+        "title": "Email Analysis: Open Digest"
+      },
+      {
+        "command": "emailAnalysis.openSummary",
+        "title": "Email Analysis: Open Summary"
+      },
+      {
+        "command": "emailAnalysis.openSettings",
+        "title": "Email Analysis: Open Settings"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p .",
+    "test": "npm run compile && node --test out/test/digest.test.js out/test/analysis-schema.test.js out/test/summary.test.js out/test/dashboard-state.test.js",
+    "package:vsix": "npm run compile && vsce package --out releases/email-analysis-poc-0.1.0.vsix",
+    "validate:sample": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-sample-validation.ps1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^3.6.2",
+    "typescript": "^5.8.3"
+  }
+}

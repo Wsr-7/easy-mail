@@ -1,0 +1,456 @@
+Option Explicit
+
+Dim fso
+Set fso = CreateObject("Scripting.FileSystemObject")
+
+Dim args
+Set args = WScript.Arguments
+
+Dim config
+Set config = CreateObject("Scripting.Dictionary")
+config.CompareMode = 1
+config.Add "max-items", 50
+config.Add "recent-hours", 24
+config.Add "folders", "Inbox"
+config.Add "body-chars", 1200
+config.Add "output", ""
+config.Add "sample", False
+config.Add "help", False
+
+ParseArgs args, config
+
+If config("help") Then
+  PrintUsage
+  WScript.Quit 0
+End If
+
+If config("output") = "" Then
+  config("output") = fso.BuildPath(GetScriptDirectory(), "..\data\mail-digest.md")
+End If
+
+EnsureParentFolder config("output")
+
+If CBool(config("sample")) Then
+  WriteSampleDigest config("output"), config
+  WScript.Echo "Generated sample digest at: " & config("output")
+  WScript.Quit 0
+End If
+
+CollectFromOutlook config("output"), config
+WScript.Echo "Generated digest at: " & config("output")
+
+Sub ParseArgs(byVal cliArgs, byRef target)
+  Dim i
+  For i = 0 To cliArgs.Count - 1
+    Dim current
+    current = LCase(cliArgs(i))
+
+    Select Case current
+      Case "--max-items", "--recent-hours", "--folders", "--body-chars", "--output"
+        If i + 1 >= cliArgs.Count Then
+          Fail "Missing value for argument: " & current
+        End If
+        target(Mid(current, 3)) = cliArgs(i + 1)
+        i = i + 1
+      Case "--sample"
+        target("sample") = True
+      Case "--help", "-h", "/?"
+        target("help") = True
+      Case Else
+        Fail "Unknown argument: " & cliArgs(i)
+    End Select
+  Next
+End Sub
+
+Sub CollectFromOutlook(byVal outputPath, byRef target)
+  On Error Resume Next
+  Dim outlook
+  Set outlook = CreateObject("Outlook.Application")
+  If Err.Number <> 0 Then
+    Fail "Unable to create Outlook.Application. " & Err.Description
+  End If
+  On Error GoTo 0
+
+  Dim ns
+  Set ns = outlook.GetNamespace("MAPI")
+
+  Dim folderNames
+  folderNames = Split(CStr(target("folders")), ";")
+
+  Dim collected()
+  Dim collectedCount
+  collectedCount = 0
+
+  Dim idx
+  For idx = 0 To UBound(folderNames)
+    Dim folderPath
+    folderPath = Trim(folderNames(idx))
+    If folderPath <> "" Then
+      CollectFolderItems ns, folderPath, CLng(target("max-items")), CLng(target("recent-hours")), CLng(target("body-chars")), collected, collectedCount
+    End If
+  Next
+
+  SortMailRecords collected, collectedCount
+  If collectedCount > CLng(target("max-items")) Then
+    collectedCount = CLng(target("max-items"))
+  End If
+  WriteDigest outputPath, target, collected, collectedCount
+End Sub
+
+Sub CollectFolderItems(byRef ns, byVal folderPath, byVal maxItems, byVal recentHours, byVal bodyChars, byRef collected, byRef collectedCount)
+  Dim folder
+  Set folder = ResolveFolder(ns, folderPath)
+  If folder Is Nothing Then
+    Fail "Outlook folder not found: " & folderPath
+  End If
+
+  Dim items
+  Set items = folder.Items
+  items.Sort "[ReceivedTime]", True
+
+  Dim cutoffEnabled
+  cutoffEnabled = (recentHours > 0)
+  Dim cutoff
+  If cutoffEnabled Then
+    cutoff = DateAdd("h", -recentHours, Now)
+  End If
+
+  Dim scanned
+  scanned = 0
+
+  Dim i
+  For i = 1 To items.Count
+    On Error Resume Next
+    Dim item
+    Set item = items.Item(i)
+    If Err.Number <> 0 Then
+      Err.Clear
+      On Error GoTo 0
+    Else
+      On Error GoTo 0
+      If Not item Is Nothing Then
+        If TypeName(item) = "MailItem" Then
+          If (Not cutoffEnabled) Or item.ReceivedTime >= cutoff Then
+            Dim record
+            Set record = BuildMailRecord(item, folderPath, bodyChars, collectedCount + 1)
+            AddRecordToArray collected, collectedCount, record
+            scanned = scanned + 1
+            If scanned >= maxItems Then
+              Exit For
+            End If
+          End If
+        End If
+      End If
+    End If
+  Next
+End Sub
+
+Function ResolveFolder(byRef ns, byVal folderPath)
+  Dim normalized
+  normalized = Replace(folderPath, "\", "/")
+  Dim parts
+  parts = Split(normalized, "/")
+
+  Dim root
+  root = Trim(parts(0))
+
+  Dim folder
+  If LCase(root) = "inbox" Then
+    Set folder = ns.GetDefaultFolder(6)
+  ElseIf LCase(root) = "sent items" Then
+    Set folder = ns.GetDefaultFolder(5)
+  ElseIf LCase(root) = "drafts" Then
+    Set folder = ns.GetDefaultFolder(16)
+  Else
+    Set folder = ns.Folders(root)
+  End If
+
+  If folder Is Nothing Then
+    Set ResolveFolder = Nothing
+    Exit Function
+  End If
+
+  Dim i
+  For i = 1 To UBound(parts)
+    Dim childName
+    childName = Trim(parts(i))
+    If childName <> "" Then
+      On Error Resume Next
+      Set folder = folder.Folders(childName)
+      If Err.Number <> 0 Then
+        Err.Clear
+        Set ResolveFolder = Nothing
+        Exit Function
+      End If
+      On Error GoTo 0
+    End If
+  Next
+
+  Set ResolveFolder = folder
+End Function
+
+Function BuildMailRecord(byRef mail, byVal folderPath, byVal bodyChars, byVal recordIndex)
+  Dim record
+  Set record = CreateObject("Scripting.Dictionary")
+  record.CompareMode = 1
+  record.Add "mailId", "mail-" & Right("000" & CStr(recordIndex), 3)
+  record.Add "subject", SafeString(mail.Subject)
+  record.Add "senderName", SafeString(mail.SenderName)
+  record.Add "senderEmail", SafeSenderEmail(mail)
+  record.Add "receivedTime", FormatDateValue(mail.ReceivedTime)
+  record.Add "sortKey", Replace(FormatDateValue(mail.ReceivedTime), " ", "T")
+  record.Add "folderPath", folderPath
+  record.Add "unread", LCase(CStr(CBool(mail.UnRead)))
+  record.Add "importance", ImportanceLabel(mail.Importance)
+  record.Add "toMe", LCase(CStr(IsDirectRecipient(mail)))
+  record.Add "ccMe", LCase(CStr(IsCcRecipient(mail)))
+  record.Add "bodyExcerpt", TruncateText(SafeString(mail.Body), bodyChars)
+  Set BuildMailRecord = record
+End Function
+
+Function SafeSenderEmail(byRef mail)
+  On Error Resume Next
+  SafeSenderEmail = SafeString(mail.SenderEmailAddress)
+  If Err.Number <> 0 Then
+    Err.Clear
+    SafeSenderEmail = ""
+  End If
+  On Error GoTo 0
+End Function
+
+Function IsDirectRecipient(byRef mail)
+  Dim lcTo
+  lcTo = LCase(SafeString(mail.To))
+  IsDirectRecipient = (Len(lcTo) > 0)
+End Function
+
+Function IsCcRecipient(byRef mail)
+  Dim lcCc
+  lcCc = LCase(SafeString(mail.CC))
+  IsCcRecipient = (Len(lcCc) > 0)
+End Function
+
+Function ImportanceLabel(byVal value)
+  Select Case CLng(value)
+    Case 2
+      ImportanceLabel = "high"
+    Case 0
+      ImportanceLabel = "low"
+    Case Else
+      ImportanceLabel = "normal"
+  End Select
+End Function
+
+Function TruncateText(byVal text, byVal maxChars)
+  Dim cleaned
+  cleaned = NormalizeWhitespace(text)
+  If Len(cleaned) <= maxChars Then
+    TruncateText = cleaned
+  Else
+    TruncateText = Left(cleaned, maxChars) & "..."
+  End If
+End Function
+
+Function NormalizeWhitespace(byVal text)
+  Dim result
+  result = Replace(text, vbCrLf, vbLf)
+  result = Replace(result, vbCr, vbLf)
+  result = Replace(result, vbTab, " ")
+  Do While InStr(result, vbLf & vbLf & vbLf) > 0
+    result = Replace(result, vbLf & vbLf & vbLf, vbLf & vbLf)
+  Loop
+  NormalizeWhitespace = Trim(result)
+End Function
+
+Function FormatDateValue(byVal dateValue)
+  Dim yearPart, monthPart, dayPart, hourPart, minutePart, secondPart
+  yearPart = Year(dateValue)
+  monthPart = Right("0" & Month(dateValue), 2)
+  dayPart = Right("0" & Day(dateValue), 2)
+  hourPart = Right("0" & Hour(dateValue), 2)
+  minutePart = Right("0" & Minute(dateValue), 2)
+  secondPart = Right("0" & Second(dateValue), 2)
+  FormatDateValue = yearPart & "-" & monthPart & "-" & dayPart & " " & hourPart & ":" & minutePart & ":" & secondPart
+End Function
+
+Sub SortMailRecords(byRef records, byVal recordCount)
+  Dim i
+  For i = 0 To recordCount - 2
+    Dim j
+    For j = i + 1 To recordCount - 1
+      If records(i)("sortKey") < records(j)("sortKey") Then
+        Dim temp
+        Set temp = records(i)
+        Set records(i) = records(j)
+        Set records(j) = temp
+      End If
+    Next
+  Next
+End Sub
+
+Sub WriteDigest(byVal outputPath, byRef target, byRef records, byVal recordCount)
+  Dim content
+  content = "# Outlook Mail Digest" & vbCrLf & vbCrLf
+  content = content & "GeneratedAt: " & FormatDateValue(Now) & vbCrLf
+  content = content & "RangeMode: RecentHours" & vbCrLf
+  content = content & "RecentHours: " & target("recent-hours") & vbCrLf
+  content = content & "MaxItems: " & target("max-items") & vbCrLf
+  content = content & "Folders:" & vbCrLf
+
+  Dim folderNames
+  folderNames = Split(CStr(target("folders")), ";")
+  Dim i
+  For i = 0 To UBound(folderNames)
+    content = content & "- " & Trim(folderNames(i)) & vbCrLf
+  Next
+
+  content = content & vbCrLf & "---" & vbCrLf
+
+  Dim index
+  For index = 0 To recordCount - 1
+    Dim record
+    Set record = records(index)
+    content = content & vbCrLf
+    content = content & "## Mail: " & record("mailId") & vbCrLf & vbCrLf
+    content = content & "Subject: " & EscapeMarkdownInline(record("subject")) & vbCrLf
+    content = content & "From: " & EscapeMarkdownInline(record("senderName")) & " <" & EscapeMarkdownInline(record("senderEmail")) & ">" & vbCrLf
+    content = content & "ReceivedTime: " & record("receivedTime") & vbCrLf
+    content = content & "Folder: " & EscapeMarkdownInline(record("folderPath")) & vbCrLf
+    content = content & "Unread: " & record("unread") & vbCrLf
+    content = content & "Importance: " & record("importance") & vbCrLf
+    content = content & "ToMe: " & record("toMe") & vbCrLf
+    content = content & "CcMe: " & record("ccMe") & vbCrLf & vbCrLf
+    content = content & "BodyExcerpt:" & vbCrLf
+    content = content & EscapeMarkdownBlock(record("bodyExcerpt")) & vbCrLf & vbCrLf
+    content = content & "---" & vbCrLf
+  Next
+
+  WriteTextFile outputPath, content
+End Sub
+
+Sub WriteSampleDigest(byVal outputPath, byRef target)
+  Dim records()
+  Dim recordCount
+  recordCount = 0
+  Dim record
+
+  Set record = BuildSampleRecord(1, "Contract approval needed", "Alice", "alice@example.com", "Inbox/Customer", "high", True, False, "Please review and approve the contract before EOD today.")
+  AddRecordToArray records, recordCount, record
+  Set record = BuildSampleRecord(2, "Weekly system notice", "No Reply", "no-reply@example.com", "Inbox/Notice", "normal", True, True, "This is the weekly system notification for the shared platform.")
+  AddRecordToArray records, recordCount, record
+  Set record = BuildSampleRecord(3, "Need your review on Q3 budget", "Bob", "bob@example.com", "Inbox/Project A", "high", True, False, "Please check the attached budget assumptions and send comments today.")
+  AddRecordToArray records, recordCount, record
+  Set record = BuildSampleRecord(4, "Follow-up: customer workshop next week", "Carol", "carol@example.com", "Inbox/Customer", "normal", False, False, "Waiting for your confirmation on the workshop agenda and attendee list.")
+  AddRecordToArray records, recordCount, record
+
+  WriteDigest outputPath, target, records, recordCount
+End Sub
+
+Function BuildSampleRecord(byVal recordIndex, byVal subject, byVal senderName, byVal senderEmail, byVal folderPath, byVal importance, byVal unread, byVal ccMe, byVal bodyExcerpt)
+  Dim record
+  Set record = CreateObject("Scripting.Dictionary")
+  record.CompareMode = 1
+  record.Add "mailId", "mail-" & Right("000" & CStr(recordIndex), 3)
+  record.Add "subject", subject
+  record.Add "senderName", senderName
+  record.Add "senderEmail", senderEmail
+  record.Add "receivedTime", FormatDateValue(DateAdd("n", -recordIndex * 15, Now))
+  record.Add "folderPath", folderPath
+  record.Add "unread", LCase(CStr(unread))
+  record.Add "importance", importance
+  record.Add "toMe", "true"
+  record.Add "ccMe", LCase(CStr(ccMe))
+  record.Add "bodyExcerpt", bodyExcerpt
+  Set BuildSampleRecord = record
+End Function
+
+Sub WriteTextFile(byVal path, byVal content)
+  Dim stream
+  Set stream = CreateObject("ADODB.Stream")
+  stream.Type = 2
+  stream.Mode = 3
+  stream.Charset = "utf-8"
+  stream.Open
+  stream.WriteText content
+  stream.SaveToFile path, 2
+  stream.Close
+End Sub
+
+Sub AddRecordToArray(byRef records, byRef recordCount, byRef record)
+  If recordCount = 0 Then
+    ReDim records(0)
+  Else
+    ReDim Preserve records(recordCount)
+  End If
+  Set records(recordCount) = record
+  recordCount = recordCount + 1
+End Sub
+
+Function EscapeMarkdownInline(byVal text)
+  Dim value
+  value = SafeString(text)
+  value = Replace(value, "`", "'")
+  EscapeMarkdownInline = value
+End Function
+
+Function EscapeMarkdownBlock(byVal text)
+  Dim value
+  value = SafeString(text)
+  value = Replace(value, vbCrLf, vbLf)
+  value = Replace(value, vbCr, vbLf)
+  EscapeMarkdownBlock = value
+End Function
+
+Function SafeString(byVal value)
+  If IsNull(value) Then
+    SafeString = ""
+  Else
+    SafeString = Trim(CStr(value))
+  End If
+End Function
+
+Sub EnsureParentFolder(byVal filePath)
+  Dim parent
+  parent = fso.GetParentFolderName(filePath)
+  If parent <> "" And Not fso.FolderExists(parent) Then
+    CreateFolderRecursive parent
+  End If
+End Sub
+
+Sub CreateFolderRecursive(byVal folderPath)
+  If folderPath = "" Then
+    Exit Sub
+  End If
+  If fso.FolderExists(folderPath) Then
+    Exit Sub
+  End If
+  Dim parent
+  parent = fso.GetParentFolderName(folderPath)
+  If parent <> "" And Not fso.FolderExists(parent) Then
+    CreateFolderRecursive parent
+  End If
+  fso.CreateFolder folderPath
+End Sub
+
+Function GetScriptDirectory()
+  GetScriptDirectory = fso.GetParentFolderName(WScript.ScriptFullName)
+End Function
+
+Sub PrintUsage()
+  WScript.Echo "Usage:"
+  WScript.Echo "  cscript //nologo collect-outlook-mails.vbs [options]"
+  WScript.Echo ""
+  WScript.Echo "Options:"
+  WScript.Echo "  --max-items <n>      Maximum mails to include."
+  WScript.Echo "  --recent-hours <n>   Only include mails newer than n hours."
+  WScript.Echo "  --folders <a;b;c>    Outlook folders to scan."
+  WScript.Echo "  --body-chars <n>     Body excerpt length."
+  WScript.Echo "  --output <path>      Output markdown path."
+  WScript.Echo "  --sample             Generate sample digest without Outlook."
+  WScript.Echo "  --help               Show this message."
+End Sub
+
+Sub Fail(byVal message)
+  WScript.Echo "ERROR: " & message
+  WScript.Quit 1
+End Sub

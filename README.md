@@ -1,36 +1,41 @@
-# Email Analysis
+# Email Analysis POC
 
-本项目用于验证一条不依赖 Microsoft Graph Mail API 的邮件 AI 分析路线：
+`Email Analysis POC` 是一个面向 `classic Outlook + VS Code + GitHub Copilot` 的本地邮件分析插件原型。
+
+它完成这条本地链路：
 
 ```text
 classic Outlook
-  -> VBScript 采集邮件并生成 Markdown
-  -> VS Code 插件读取 Markdown
-  -> GitHub Copilot Language Model API 生成结构化 JSON
-  -> VS Code sidebar / dashboard 展示分类、优先级、行动项和回复草稿
+  -> VBScript 采集邮件
+  -> mail-digest.md
+  -> VS Code 插件调用 Copilot
+  -> analysis-result.json
+  -> Dashboard + mail-summary.md
 ```
 
-## 当前目标
+## 根目录结构
 
-- 先做本地 POC，不接公司中心化服务。
-- 支持 classic Outlook，本机通过 Outlook COM 读取邮件。
-- 支持自定义拉取范围：最近 N 封、最近 N 小时。
-- 支持只扫描指定 Outlook 文件夹。
-- 输入数据使用 Markdown，AI 输出使用 JSON，看板再生成 Markdown 总结。
-- VS Code 插件可打包为 `.vsix`，即使当前机器没有安装 VS Code，也可以用 Node.js 工具链构建。
+```text
+prompts/     Copilot 分析提示词
+scripts/     VBScript 与构建/验证脚本
+src/         TypeScript 插件源码
+releases/    打包生成的带版本号 VSIX
+```
 
-## 文档
+## 关键能力
 
-- [设计方案](docs/design.md)
-- [实现步骤](docs/implementation-steps.md)
-- [VSIX 构建与发布](docs/vsix-build.md)
-- [安全与合规边界](docs/security.md)
+- 支持 `最近 N 封` 与 `最近 N 小时`
+- 支持 `指定一个或多个 Outlook 文件夹`
+- 支持 `sample mode`，无 Outlook 也能演示
+- 支持 `GitHub Copilot` 模型分析
+- 模型优先级支持 `5.5 -> 5.4` 回退顺序
+- 生成：
+  - `mail-digest.md`
+  - `analysis-result.json`
+  - `mail-summary.md`
 
-## 非目标
+更多说明见：
 
-- 不自动删除邮件。
-- 不自动发送邮件。
-- 不绕过公司 PowerShell Constrained Language 策略。
-- 不解析 `.ost` 文件。
-- 不支持 new Outlook 后台本地扫描。
-
+- [user guide.md](./user%20guide.md)
+- [setup.md](./setup.md)
+- [docs/acceptance-criteria.md](./docs/acceptance-criteria.md)
