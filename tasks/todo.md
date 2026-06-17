@@ -120,3 +120,16 @@
 - 本切片不修改 `src/extension.ts`，避免把 Thread AI command、Dashboard 和 Copilot 调用一次性混入。
 - Thread prompt 输入使用 JSON-like timeline，不复用 single mail Markdown digest。
 - Provider abstraction 仍然推迟到 Thread AI 跑通之后。
+
+## v0.6 Wave 3: Reports Foundation
+
+- [x] 新增 single mail report 纯模块和测试
+- [x] 新增 thread report 纯模块和测试
+- [x] 新增 daily brief 纯模块和测试
+- [x] 接入主 `npm test`
+- [x] 提交 reports foundation 小提交
+
+### Working Notes
+
+- Reports 只消费已分析结果字段，不读取 mail-store 原始正文。
+- Reports 暂不接 Dashboard / commands，留给后续 Integration Agent 决定入口。
