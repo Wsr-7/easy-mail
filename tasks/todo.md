@@ -55,3 +55,20 @@
 - `architecture-background.md` 只作为背景；本轮唯一执行依据是 `docs/v2-design/email-analysis-repo-specific-implementation-plan.md`。
 - 不实现 Issue 2/3，不改 thread/security gate，不打包，除非后续明确要求。
 - 保留 existing single mail analysis pipeline，不改变 category / priority / draft reply 行为。
+
+## v0.3 Wave 0-1: Thread Timeline MVP Data Layer
+
+- [x] Wave 0：确认 v0.2 / Issue 1 成果存在
+- [x] Wave 0：baseline `npm test` 通过
+- [x] Wave 1A：Thread Data fields
+- [x] Wave 1B：Thread Store / Engine
+- [x] Wave 1C：Thread Timeline helpers
+- [x] Wave 1：统一验证 `npm test`
+
+### Working Notes
+
+- 本阶段从 `docs/v2-design/email-analysis-repo-specific-implementation-plan.md` 的 v0.3 Thread Timeline MVP 开始。
+- `src/extension.ts` 暂不修改，留给后续 Thread Timeline Integration Agent。
+- `scripts/collect-outlook-mails.vbs`、`src/lib/digest.ts`、`src/lib/mail-store.ts` 归 Thread Data Agent。
+- `src/lib/thread-store.ts` / `src/lib/thread-engine.ts` 归 Thread Engine Agent。
+- `src/lib/thread-timeline.ts` 归 Thread Timeline Agent。

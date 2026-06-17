@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { emptyMailIndex, emptyMailStore, folderOldestReceivedTimes, mergeDigestIntoIndex, mergeDigestIntoStore, pruneMailIndex, pruneMailStore } from "../lib/mail-store";
+import { emptyMailIndex, emptyMailStore, folderOldestReceivedTimes, mergeDigestIntoIndex, mergeDigestIntoStore, normalizeMailStore, pruneMailIndex, pruneMailStore } from "../lib/mail-store";
 
 test("mergeDigestIntoStore adds new mail and skips duplicates by stable id", () => {
   const digest = {
@@ -10,14 +10,23 @@ test("mergeDigestIntoStore adds new mail and skips duplicates by stable id", () 
         mailId: "mail-001",
         internetMessageId: "<mail-001@example.com>",
         entryId: "entry-001",
+        conversationId: "conv-001",
+        conversationIndex: "01ABCDEF",
         subject: "Contract approval needed",
         from: "Alice <alice@example.com>",
+        senderName: "Alice",
+        senderEmail: "alice@example.com",
         receivedTime: "2026-06-16 09:00:00",
+        sentTime: "2026-06-16 08:58:00",
         folder: "Inbox",
         unread: "true",
         importance: "high",
         toMe: "true",
         ccMe: "false",
+        to: "Me <me@example.com>",
+        cc: "Legal <legal@example.com>",
+        attachmentCount: 2,
+        attachmentNames: ["contract.pdf", "budget.xlsx"],
         bodyExcerpt: "Please approve the contract."
       }
     ]
@@ -30,6 +39,51 @@ test("mergeDigestIntoStore adds new mail and skips duplicates by stable id", () 
   assert.equal(second.skipped, 1);
   assert.equal(second.store.items.length, 1);
   assert.equal(second.store.items[0].mailId, "internet:<mail-001@example.com>");
+  assert.equal(second.store.items[0].conversationId, "conv-001");
+  assert.equal(second.store.items[0].conversationIndex, "01ABCDEF");
+  assert.equal(second.store.items[0].senderName, "Alice");
+  assert.equal(second.store.items[0].senderEmail, "alice@example.com");
+  assert.equal(second.store.items[0].sentTime, "2026-06-16 08:58:00");
+  assert.equal(second.store.items[0].to, "Me <me@example.com>");
+  assert.equal(second.store.items[0].cc, "Legal <legal@example.com>");
+  assert.equal(second.store.items[0].attachmentCount, 2);
+  assert.deepEqual(second.store.items[0].attachmentNames, ["contract.pdf", "budget.xlsx"]);
+});
+
+test("normalizeMailStore fills thread fields for old store json", () => {
+  const store = normalizeMailStore({
+    generatedAt: "2026-06-16T10:00:00.000Z",
+    lastPullAt: "2026-06-16 10:00:00",
+    items: [
+      {
+        mailId: "mail-old",
+        sourceMailId: "mail-old",
+        internetMessageId: "",
+        entryId: "",
+        subject: "Old mail",
+        from: "Alice <alice@example.com>",
+        receivedTime: "2026-06-16 09:00:00",
+        folder: "Inbox",
+        unread: "false",
+        importance: "normal",
+        toMe: "true",
+        ccMe: "false",
+        bodyExcerpt: "Old format",
+        pulledAt: "2026-06-16T10:00:00.000Z"
+      }
+    ]
+  });
+
+  assert.equal(store.items.length, 1);
+  assert.equal(store.items[0].conversationId, "");
+  assert.equal(store.items[0].conversationIndex, "");
+  assert.equal(store.items[0].senderName, "");
+  assert.equal(store.items[0].senderEmail, "");
+  assert.equal(store.items[0].sentTime, "");
+  assert.equal(store.items[0].to, "");
+  assert.equal(store.items[0].cc, "");
+  assert.equal(store.items[0].attachmentCount, 0);
+  assert.deepEqual(store.items[0].attachmentNames, []);
 });
 
 test("mergeDigestIntoStore skips ids already present in mail index", () => {

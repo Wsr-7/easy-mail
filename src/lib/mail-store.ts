@@ -6,15 +6,25 @@ export interface StoredMail {
   sourceMailId: string;
   internetMessageId: string;
   entryId: string;
+  conversationId?: string;
+  conversationIndex?: string;
   subject: string;
   from: string;
+  senderName?: string;
+  senderEmail?: string;
   receivedTime: string;
+  sentTime?: string;
   folder: string;
   unread: string;
   importance: string;
   toMe: string;
   ccMe: string;
+  to?: string;
+  cc?: string;
+  attachmentCount?: number;
+  attachmentNames?: string[];
   bodyExcerpt: string;
+  bodyHash?: string;
   pulledAt: string;
 }
 
@@ -152,15 +162,25 @@ export function digestItemToStoredMail(item: DigestItem, pulledAt: string): Stor
     sourceMailId: item.mailId,
     internetMessageId: item.internetMessageId,
     entryId: item.entryId,
+    conversationId: stringValue(item.conversationId),
+    conversationIndex: stringValue(item.conversationIndex),
     subject: item.subject,
     from: item.from,
+    senderName: stringValue(item.senderName),
+    senderEmail: stringValue(item.senderEmail),
     receivedTime: item.receivedTime,
+    sentTime: stringValue(item.sentTime),
     folder: item.folder,
     unread: item.unread,
     importance: item.importance,
     toMe: item.toMe,
     ccMe: item.ccMe,
+    to: stringValue(item.to),
+    cc: stringValue(item.cc),
+    attachmentCount: numberValue(item.attachmentCount),
+    attachmentNames: arrayValue(item.attachmentNames),
     bodyExcerpt: item.bodyExcerpt,
+    bodyHash: hashText(item.bodyExcerpt),
     pulledAt
   };
 }
@@ -280,15 +300,25 @@ function normalizeStoredMail(input: unknown): StoredMail | null {
     sourceMailId: String(input.sourceMailId || ""),
     internetMessageId: String(input.internetMessageId || ""),
     entryId: String(input.entryId || ""),
+    conversationId: String(input.conversationId || ""),
+    conversationIndex: String(input.conversationIndex || ""),
     subject: String(input.subject || ""),
     from: String(input.from || ""),
+    senderName: String(input.senderName || ""),
+    senderEmail: String(input.senderEmail || ""),
     receivedTime: String(input.receivedTime || ""),
+    sentTime: String(input.sentTime || ""),
     folder: String(input.folder || ""),
     unread: String(input.unread || ""),
     importance: String(input.importance || ""),
     toMe: String(input.toMe || ""),
     ccMe: String(input.ccMe || ""),
+    to: String(input.to || ""),
+    cc: String(input.cc || ""),
+    attachmentCount: numberValue(input.attachmentCount),
+    attachmentNames: arrayValue(input.attachmentNames),
     bodyExcerpt: String(input.bodyExcerpt || ""),
+    bodyHash: String(input.bodyHash || hashText(String(input.bodyExcerpt || ""))),
     pulledAt: String(input.pulledAt || "")
   };
 }
@@ -378,6 +408,26 @@ function parseDate(value: string): number {
 
 function unique(values: string[]): string[] {
   return [...new Set(values)];
+}
+
+function stringValue(value: unknown): string {
+  return String(value || "");
+}
+
+function numberValue(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function arrayValue(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map((item) => String(item || "").trim()).filter(Boolean);
+}
+
+function hashText(value: string): string {
+  return crypto.createHash("sha256").update(String(value || "")).digest("hex");
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

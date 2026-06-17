@@ -10,14 +10,23 @@ export interface DigestItem {
   mailId: string;
   internetMessageId: string;
   entryId: string;
+  conversationId?: string;
+  conversationIndex?: string;
   subject: string;
   from: string;
+  senderName?: string;
+  senderEmail?: string;
   receivedTime: string;
+  sentTime?: string;
   folder: string;
   unread: string;
   importance: string;
   toMe: string;
   ccMe: string;
+  to?: string;
+  cc?: string;
+  attachmentCount?: number;
+  attachmentNames?: string[];
   bodyExcerpt: string;
 }
 
@@ -70,14 +79,23 @@ function parseMailSection(section: string): DigestItem | null {
     mailId: lines[0],
     internetMessageId: "",
     entryId: "",
+    conversationId: "",
+    conversationIndex: "",
     subject: "",
     from: "",
+    senderName: "",
+    senderEmail: "",
     receivedTime: "",
+    sentTime: "",
     folder: "",
     unread: "",
     importance: "",
     toMe: "",
     ccMe: "",
+    to: "",
+    cc: "",
+    attachmentCount: 0,
+    attachmentNames: [],
     bodyExcerpt: bodyText
   };
 
@@ -85,20 +103,54 @@ function parseMailSection(section: string): DigestItem | null {
     assignIfPrefix(result, line, "Subject: ", "subject");
     assignIfPrefix(result, line, "InternetMessageId: ", "internetMessageId");
     assignIfPrefix(result, line, "EntryId: ", "entryId");
+    assignIfPrefix(result, line, "ConversationId: ", "conversationId");
+    assignIfPrefix(result, line, "ConversationIndex: ", "conversationIndex");
     assignIfPrefix(result, line, "From: ", "from");
     assignIfPrefix(result, line, "ReceivedTime: ", "receivedTime");
+    assignIfPrefix(result, line, "SentTime: ", "sentTime");
     assignIfPrefix(result, line, "Folder: ", "folder");
     assignIfPrefix(result, line, "Unread: ", "unread");
     assignIfPrefix(result, line, "Importance: ", "importance");
     assignIfPrefix(result, line, "ToMe: ", "toMe");
     assignIfPrefix(result, line, "CcMe: ", "ccMe");
+    assignIfPrefix(result, line, "To: ", "to");
+    assignIfPrefix(result, line, "Cc: ", "cc");
+    if (line.startsWith("AttachmentCount: ")) {
+      result.attachmentCount = Number(line.slice("AttachmentCount: ".length).trim()) || 0;
+    }
+    if (line.startsWith("AttachmentNames: ")) {
+      result.attachmentNames = splitList(line.slice("AttachmentNames: ".length));
+    }
   }
+
+  const sender = parseSender(result.from);
+  result.senderName = result.senderName || sender.name;
+  result.senderEmail = result.senderEmail || sender.email;
 
   return result;
 }
 
 function assignIfPrefix(target: DigestItem, line: string, prefix: string, key: keyof DigestItem): void {
   if (line.startsWith(prefix)) {
-    target[key] = line.slice(prefix.length).trim() as never;
+    (target as unknown as Record<string, unknown>)[key] = line.slice(prefix.length).trim();
   }
+}
+
+function splitList(value: string): string[] {
+  return String(value || "")
+    .split(";")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function parseSender(value: string): { name: string; email: string } {
+  const text = String(value || "").trim();
+  const match = text.match(/^(.*?)\s*<([^<>]+)>$/);
+  if (!match) {
+    return { name: text, email: "" };
+  }
+  return {
+    name: match[1].trim(),
+    email: match[2].trim()
+  };
 }

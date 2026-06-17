@@ -277,16 +277,23 @@ Function BuildMailRecord(byRef mail, byVal folderPath, byVal bodyChars, byVal re
   record.Add "mailId", "mail-" & Right("000" & CStr(recordIndex), 3)
   record.Add "internetMessageId", SafeInternetMessageId(mail)
   record.Add "entryId", SafeString(mail.EntryID)
+  record.Add "conversationId", SafeConversationId(mail)
+  record.Add "conversationIndex", SafeConversationIndex(mail)
   record.Add "subject", SafeString(mail.Subject)
   record.Add "senderName", SafeString(mail.SenderName)
   record.Add "senderEmail", SafeSenderEmail(mail)
   record.Add "receivedTime", FormatDateValue(mail.ReceivedTime)
+  record.Add "sentTime", SafeDateValue(mail.SentOn)
   record.Add "sortKey", Replace(FormatDateValue(mail.ReceivedTime), " ", "T")
   record.Add "folderPath", folderPath
   record.Add "unread", LCase(CStr(CBool(mail.UnRead)))
   record.Add "importance", ImportanceLabel(mail.Importance)
   record.Add "toMe", LCase(CStr(IsDirectRecipient(mail)))
   record.Add "ccMe", LCase(CStr(IsCcRecipient(mail)))
+  record.Add "to", SafeTo(mail)
+  record.Add "cc", SafeCc(mail)
+  record.Add "attachmentCount", SafeAttachmentCount(mail)
+  record.Add "attachmentNames", SafeAttachmentNames(mail)
   record.Add "bodyExcerpt", TruncateText(SafeString(mail.Body), bodyChars)
   Set BuildMailRecord = record
 End Function
@@ -313,15 +320,100 @@ Function SafeSenderEmail(byRef mail)
   On Error GoTo 0
 End Function
 
+Function SafeConversationId(byRef mail)
+  On Error Resume Next
+  SafeConversationId = SafeString(mail.ConversationID)
+  If Err.Number <> 0 Then
+    Err.Clear
+    SafeConversationId = ""
+  End If
+  On Error GoTo 0
+End Function
+
+Function SafeConversationIndex(byRef mail)
+  On Error Resume Next
+  SafeConversationIndex = SafeString(mail.ConversationIndex)
+  If Err.Number <> 0 Then
+    Err.Clear
+    SafeConversationIndex = ""
+  End If
+  On Error GoTo 0
+End Function
+
+Function SafeDateValue(byVal value)
+  On Error Resume Next
+  SafeDateValue = FormatDateValue(value)
+  If Err.Number <> 0 Then
+    Err.Clear
+    SafeDateValue = ""
+  End If
+  On Error GoTo 0
+End Function
+
+Function SafeTo(byRef mail)
+  On Error Resume Next
+  SafeTo = SafeString(mail.To)
+  If Err.Number <> 0 Then
+    Err.Clear
+    SafeTo = ""
+  End If
+  On Error GoTo 0
+End Function
+
+Function SafeCc(byRef mail)
+  On Error Resume Next
+  SafeCc = SafeString(mail.CC)
+  If Err.Number <> 0 Then
+    Err.Clear
+    SafeCc = ""
+  End If
+  On Error GoTo 0
+End Function
+
+Function SafeAttachmentCount(byRef mail)
+  On Error Resume Next
+  SafeAttachmentCount = CLng(mail.Attachments.Count)
+  If Err.Number <> 0 Then
+    Err.Clear
+    SafeAttachmentCount = 0
+  End If
+  On Error GoTo 0
+End Function
+
+Function SafeAttachmentNames(byRef mail)
+  On Error Resume Next
+  Dim count
+  count = CLng(mail.Attachments.Count)
+  If Err.Number <> 0 Or count <= 0 Then
+    Err.Clear
+    SafeAttachmentNames = ""
+    On Error GoTo 0
+    Exit Function
+  End If
+
+  Dim names()
+  ReDim names(count - 1)
+  Dim i
+  For i = 1 To count
+    names(i - 1) = SafeString(mail.Attachments.Item(i).FileName)
+    If Err.Number <> 0 Then
+      Err.Clear
+      names(i - 1) = ""
+    End If
+  Next
+  SafeAttachmentNames = Join(names, "; ")
+  On Error GoTo 0
+End Function
+
 Function IsDirectRecipient(byRef mail)
   Dim lcTo
-  lcTo = LCase(SafeString(mail.To))
+  lcTo = LCase(SafeTo(mail))
   IsDirectRecipient = (Len(lcTo) > 0)
 End Function
 
 Function IsCcRecipient(byRef mail)
   Dim lcCc
-  lcCc = LCase(SafeString(mail.CC))
+  lcCc = LCase(SafeCc(mail))
   IsCcRecipient = (Len(lcCc) > 0)
 End Function
 
@@ -409,14 +501,21 @@ Sub WriteDigest(byVal outputPath, byRef target, byRef records, byVal recordCount
     content = content & "## Mail: " & record("mailId") & vbCrLf & vbCrLf
     content = content & "InternetMessageId: " & EscapeMarkdownInline(record("internetMessageId")) & vbCrLf
     content = content & "EntryId: " & EscapeMarkdownInline(record("entryId")) & vbCrLf
+    content = content & "ConversationId: " & EscapeMarkdownInline(record("conversationId")) & vbCrLf
+    content = content & "ConversationIndex: " & EscapeMarkdownInline(record("conversationIndex")) & vbCrLf
     content = content & "Subject: " & EscapeMarkdownInline(record("subject")) & vbCrLf
     content = content & "From: " & EscapeMarkdownInline(record("senderName")) & " <" & EscapeMarkdownInline(record("senderEmail")) & ">" & vbCrLf
     content = content & "ReceivedTime: " & record("receivedTime") & vbCrLf
+    content = content & "SentTime: " & record("sentTime") & vbCrLf
     content = content & "Folder: " & EscapeMarkdownInline(record("folderPath")) & vbCrLf
     content = content & "Unread: " & record("unread") & vbCrLf
     content = content & "Importance: " & record("importance") & vbCrLf
     content = content & "ToMe: " & record("toMe") & vbCrLf
-    content = content & "CcMe: " & record("ccMe") & vbCrLf & vbCrLf
+    content = content & "CcMe: " & record("ccMe") & vbCrLf
+    content = content & "To: " & EscapeMarkdownInline(record("to")) & vbCrLf
+    content = content & "Cc: " & EscapeMarkdownInline(record("cc")) & vbCrLf
+    content = content & "AttachmentCount: " & CStr(record("attachmentCount")) & vbCrLf
+    content = content & "AttachmentNames: " & EscapeMarkdownInline(record("attachmentNames")) & vbCrLf & vbCrLf
     content = content & "BodyExcerpt:" & vbCrLf
     content = content & EscapeMarkdownBlock(record("bodyExcerpt")) & vbCrLf & vbCrLf
     content = content & "---" & vbCrLf
@@ -432,12 +531,20 @@ Sub WriteSampleDigest(byVal outputPath, byRef target)
   Dim record
 
   Set record = BuildSampleRecord(1, "Contract approval needed", "Alice", "alice@example.com", "Inbox/Customer", "high", True, False, "Please review and approve the contract before EOD today.")
+  record("conversationId") = "sample-thread-contract"
+  record("conversationIndex") = "0001"
+  record("attachmentCount") = 1
+  record("attachmentNames") = "contract.pdf"
   AddRecordToArray records, recordCount, record
   Set record = BuildSampleRecord(2, "Weekly system notice", "No Reply", "no-reply@example.com", "Inbox/Notice", "normal", True, True, "This is the weekly system notification for the shared platform.")
   AddRecordToArray records, recordCount, record
   Set record = BuildSampleRecord(3, "Need your review on Q3 budget", "Bob", "bob@example.com", "Inbox/Project A", "high", True, False, "Please check the attached budget assumptions and send comments today.")
+  record("attachmentCount") = 1
+  record("attachmentNames") = "budget.xlsx"
   AddRecordToArray records, recordCount, record
   Set record = BuildSampleRecord(4, "Follow-up: customer workshop next week", "Carol", "carol@example.com", "Inbox/Customer", "normal", False, False, "Waiting for your confirmation on the workshop agenda and attendee list.")
+  record("conversationId") = "sample-thread-contract"
+  record("conversationIndex") = "0002"
   AddRecordToArray records, recordCount, record
 
   WriteDigest outputPath, target, records, recordCount
@@ -450,15 +557,22 @@ Function BuildSampleRecord(byVal recordIndex, byVal subject, byVal senderName, b
   record.Add "mailId", "mail-" & Right("000" & CStr(recordIndex), 3)
   record.Add "internetMessageId", "<sample-" & CStr(recordIndex) & "@email-analysis.local>"
   record.Add "entryId", "sample-entry-" & CStr(recordIndex)
+  record.Add "conversationId", "sample-thread-" & CStr(recordIndex)
+  record.Add "conversationIndex", "000" & CStr(recordIndex)
   record.Add "subject", subject
   record.Add "senderName", senderName
   record.Add "senderEmail", senderEmail
   record.Add "receivedTime", FormatDateValue(DateAdd("n", -recordIndex * 15, Now))
+  record.Add "sentTime", FormatDateValue(DateAdd("n", -recordIndex * 15 - 2, Now))
   record.Add "folderPath", folderPath
   record.Add "unread", LCase(CStr(unread))
   record.Add "importance", importance
   record.Add "toMe", "true"
   record.Add "ccMe", LCase(CStr(ccMe))
+  record.Add "to", "Me <me@example.com>"
+  record.Add "cc", ""
+  record.Add "attachmentCount", 0
+  record.Add "attachmentNames", ""
   record.Add "bodyExcerpt", bodyExcerpt
   Set BuildSampleRecord = record
 End Function
