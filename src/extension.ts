@@ -9,6 +9,8 @@ import { buildSummaryMarkdown } from "./lib/summary";
 import { buildDashboardState, CATEGORY_ORDER, type DashboardState } from "./lib/dashboard-state";
 import { allowedCategoryIds, composeAnalysisPrompt, normalizePromptConfig, type PromptConfig } from "./lib/prompt-config";
 import { buildBatchDigestMarkdown, emptyMailIndex, emptyMailStore, folderOldestReceivedTimes, mergeDigestIntoIndex, mergeDigestIntoStore, normalizeMailIndex, normalizeMailStore, pruneMailIndex, pruneMailStore, removeStoredMailByIds, type MailIndex, type MailStore, type StoredMail } from "./lib/mail-store";
+import { buildThreadStore } from "./lib/thread-engine";
+import { emptyThreadStore, mergeThreadStores, normalizeThreadStore, pruneThreadStore, type ThreadStore } from "./lib/thread-store";
 
 type Locale = "zh-CN" | "en-US";
 
@@ -56,10 +58,11 @@ type DashboardLabels = {
     enOption: string;
   };
   meta: Record<"range" | "folders" | "generated" | "requestedModel" | "lastUsedModel" | "lastPull" | "lastImport", string>;
-  stats: Record<"pulled" | "pending" | "analysed" | "blocked" | "mustHandle" | "risk" | "waiting" | "notice", string>;
+  stats: Record<"pulled" | "pending" | "analysed" | "blocked" | "mustHandle" | "risk" | "waiting" | "notice" | "threads", string>;
   categories: Record<string, string>;
-  card: Record<"from" | "received" | "summary" | "reason" | "suggestedAction" | "copyDraft" | "ignore" | "noItems", string>;
+  card: Record<"from" | "received" | "summary" | "reason" | "suggestedAction" | "copyDraft" | "ignore" | "noItems" | "thread", string>;
   pending: Record<"title" | "blockedTitle" | "classification" | "autoAllowed" | "manualRequired" | "select", string>;
+  threads: Record<"title" | "participants" | "messages" | "lastTime" | "folders" | "contentStatus" | "timeline" | "attachments" | "mailIds", string>;
   progress: Record<"pullMail" | "loadMore" | "sampleDigest" | "analyze", string> & { detail: string };
   model: Record<"fallback" | "preferred", string>;
 };
@@ -125,7 +128,8 @@ const LABELS: Record<Locale, DashboardLabels> = {
       mustHandle: "必须处理",
       risk: "风险",
       waiting: "等待回复",
-      notice: "通知"
+      notice: "通知",
+      threads: "邮件线程"
     },
     categories: {
       mustHandleToday: "今天必须处理",
@@ -144,7 +148,8 @@ const LABELS: Record<Locale, DashboardLabels> = {
       suggestedAction: "建议动作",
       copyDraft: "复制回复草稿",
       ignore: "忽略",
-      noItems: "暂无邮件"
+      noItems: "暂无邮件",
+      thread: "线程"
     },
     pending: {
       title: "未分析邮件",
@@ -153,6 +158,17 @@ const LABELS: Record<Locale, DashboardLabels> = {
       autoAllowed: "允许自动分析",
       manualRequired: "需要手动确认",
       select: "选择"
+    },
+    threads: {
+      title: "邮件线程",
+      participants: "参与人",
+      messages: "消息数",
+      lastTime: "最后时间",
+      folders: "文件夹",
+      contentStatus: "内容状态",
+      timeline: "时间线",
+      attachments: "附件",
+      mailIds: "邮件 ID"
     },
     progress: {
       pullMail: "正在获取新邮件",
@@ -226,7 +242,8 @@ const LABELS: Record<Locale, DashboardLabels> = {
       mustHandle: "Must Handle",
       risk: "Risk",
       waiting: "Waiting",
-      notice: "Notice"
+      notice: "Notice",
+      threads: "Threads"
     },
     categories: {
       mustHandleToday: "Must Handle Today",
@@ -245,7 +262,8 @@ const LABELS: Record<Locale, DashboardLabels> = {
       suggestedAction: "Suggested Action",
       copyDraft: "Copy Draft",
       ignore: "Ignore",
-      noItems: "No items"
+      noItems: "No items",
+      thread: "Thread"
     },
     pending: {
       title: "Pending Mail",
@@ -254,6 +272,17 @@ const LABELS: Record<Locale, DashboardLabels> = {
       autoAllowed: "Auto allowed",
       manualRequired: "Manual confirmation required",
       select: "Select"
+    },
+    threads: {
+      title: "Threads",
+      participants: "Participants",
+      messages: "Messages",
+      lastTime: "Last Time",
+      folders: "Folders",
+      contentStatus: "Content Status",
+      timeline: "Timeline",
+      attachments: "Attachments",
+      mailIds: "Mail IDs"
     },
     progress: {
       pullMail: "Fetching new mail",
@@ -365,6 +394,12 @@ class EmailAnalysisApp {
     const prunedStore = pruneMailStore(merge.store, Number(config.mailStoreRetentionDays || 1));
     await this.writeMailStore(prunedStore);
     await this.writeMailIndex(nextIndex);
+    const builtThreadStore = buildThreadStore(prunedStore.items);
+    const nextThreadStore = pruneThreadStore(
+      mergeThreadStores(await this.readThreadStore(), builtThreadStore),
+      Number(config.mailStoreRetentionDays || 1)
+    );
+    await this.writeThreadStore(nextThreadStore);
     const classificationCache = ensureClassifications(prunedStore.items, await this.readClassificationCache());
     await this.writeClassificationCache(classificationCache);
     await this.log("pullMail:done", {
@@ -372,7 +407,8 @@ class EmailAnalysisApp {
       added: merge.added,
       skipped: merge.skipped,
       storeItems: prunedStore.items.length,
-      indexItems: nextIndex.items.length
+      indexItems: nextIndex.items.length,
+      threads: nextThreadStore.items.length
     });
     await this.refresh();
     await vscode.window.showInformationMessage(`Email digest generated. Added ${merge.added}, skipped ${merge.skipped}.`);
@@ -539,6 +575,7 @@ class EmailAnalysisApp {
   public async clearLocalCache(): Promise<void> {
     await this.writeMailStore(emptyMailStore());
     await this.writeMailIndex(emptyMailIndex());
+    await this.writeThreadStore(emptyThreadStore());
     await this.writeClassificationCache(normalizeClassificationCache({}));
     await fs.promises.writeFile(this.getAnalysisPath(), `${JSON.stringify({ generatedAt: "", overview: { totalMails: 0, mustHandleToday: 0, risks: 0, waitingForMe: 0, notices: 0 }, items: [] }, null, 2)}\n`, "utf8");
     await this.refresh();
@@ -579,6 +616,10 @@ class EmailAnalysisApp {
 
   private getMailIndexPath(): string {
     return path.join(this.getDataDir(), "mail-index.json");
+  }
+
+  private getThreadStorePath(): string {
+    return path.join(this.getDataDir(), "thread-store.json");
   }
 
   private getClassificationCachePath(): string {
@@ -753,6 +794,21 @@ class EmailAnalysisApp {
     await fs.promises.writeFile(this.getMailIndexPath(), `${JSON.stringify(index, null, 2)}\n`, "utf8");
   }
 
+  private async readThreadStore(): Promise<ThreadStore> {
+    if (!fs.existsSync(this.getThreadStorePath())) {
+      return emptyThreadStore();
+    }
+    try {
+      return normalizeThreadStore(JSON.parse(await fs.promises.readFile(this.getThreadStorePath(), "utf8")));
+    } catch {
+      return emptyThreadStore();
+    }
+  }
+
+  private async writeThreadStore(store: ThreadStore): Promise<void> {
+    await fs.promises.writeFile(this.getThreadStorePath(), `${JSON.stringify(store, null, 2)}\n`, "utf8");
+  }
+
   private async readClassificationCache(): Promise<ClassificationCache> {
     if (!fs.existsSync(this.getClassificationCachePath())) {
       return normalizeClassificationCache({});
@@ -785,6 +841,7 @@ class EmailAnalysisApp {
     const digest = parseDigest(await fs.promises.readFile(this.getDigestPath(), "utf8"));
     const merge = mergeDigestIntoStore(store, digest);
     await this.writeMailStore(merge.store);
+    await this.writeThreadStore(mergeThreadStores(await this.readThreadStore(), buildThreadStore(merge.store.items)));
     await this.writeClassificationCache(ensureClassifications(merge.store.items, await this.readClassificationCache()));
   }
 
@@ -807,6 +864,8 @@ class EmailAnalysisApp {
     const store = await this.readMailStore();
     const index = pruneMailIndex(await this.readMailIndex(), Number(config.mailIndexRetentionDays || 7));
     await this.writeMailIndex(index);
+    const threadStore = pruneThreadStore(await this.readThreadStore(), Number(config.mailStoreRetentionDays || 1));
+    await this.writeThreadStore(threadStore);
     const classifications = ensureClassifications(store.items, await this.readClassificationCache());
     await this.writeClassificationCache(classifications);
     const queue = buildQueueState(
@@ -817,13 +876,14 @@ class EmailAnalysisApp {
       config.autoAnalyzeEnabled !== false,
       Number(config.autoAnalyzeMaxClassificationLevel || 2)
     );
-    const state = buildDashboardState(config, digest, analysis, ignoredIds, allowedCategoryIds(promptConfig)) as DashboardState & {
+    const state = buildDashboardState(config, digest, analysis, ignoredIds, allowedCategoryIds(promptConfig), threadStore) as DashboardState & {
       modelInfo?: Record<string, unknown>;
       store?: MailStore;
       index?: MailIndex;
       queue?: ReturnType<typeof buildQueueState>;
       classifications?: ClassificationCache;
       promptConfig?: PromptConfig;
+      threadStore?: ThreadStore;
     };
     state.modelInfo = await this.readModelInfo();
     state.store = store;
@@ -831,6 +891,7 @@ class EmailAnalysisApp {
     state.queue = queue;
     state.classifications = classifications;
     state.promptConfig = promptConfig;
+    state.threadStore = threadStore;
     return state;
   }
 
@@ -960,13 +1021,16 @@ class EmailAnalysisApp {
       queue?: ReturnType<typeof buildQueueState>;
       classifications?: ClassificationCache;
       promptConfig?: PromptConfig;
+      threadStore?: ThreadStore;
     };
     const locale = getLocaleFromConfig(config);
     const labels = getLabels(locale);
     const promptConfig = extendedState.promptConfig || normalizePromptConfig({});
     promptConfig.importantSenders = mergeStringLists(promptConfig.importantSenders, parseFolders(config.importantSenders, []));
     const categoryLabels = buildCategoryLabels(labels, promptConfig, locale);
-    const categoryHtml = new Map(state.categories.map((entry) => [entry.id, renderCategory(entry.id, entry.items, labels, categoryLabels)]));
+    const threadStore = extendedState.threadStore || emptyThreadStore();
+    const threadByMailId = buildThreadLookup(threadStore);
+    const categoryHtml = new Map(state.categories.map((entry) => [entry.id, renderCategory(entry.id, entry.items, labels, categoryLabels, threadByMailId)]));
     const mustHandleHtml = categoryHtml.get("mustHandleToday") || "";
     const rows = state.categories
       .filter((entry) => entry.id !== "mustHandleToday")
@@ -981,8 +1045,9 @@ class EmailAnalysisApp {
     const canAnalyze = !!selectConfiguredModel(availableModels, configuredModel);
     const analysisDisabled = canAnalyze ? "" : " disabled";
     const modelOptions = renderModelOptions(availableModels, configuredModel, labels);
-    const pendingHtml = renderPendingPanel(labels.pending.title, queue.pending, classifications, labels, queue.allowed, false);
-    const blockedHtml = renderPendingPanel(labels.pending.blockedTitle, queue.blocked, classifications, labels, [], true);
+    const pendingHtml = renderPendingPanel(labels.pending.title, queue.pending, classifications, labels, queue.allowed, false, threadByMailId);
+    const blockedHtml = renderPendingPanel(labels.pending.blockedTitle, queue.blocked, classifications, labels, [], true, threadByMailId);
+    const threadsHtml = renderThreadsPanel(threadStore, labels);
     const configuredFolders = Array.isArray(config.folders) ? config.folders.map(String) : ["Inbox"];
     const hasHistoryAnchors = Object.keys(folderOldestReceivedTimes(index, configuredFolders)).length > 0;
     const loadMoreDisabled = hasHistoryAnchors ? "" : " disabled";
@@ -1034,6 +1099,9 @@ class EmailAnalysisApp {
     .empty { color: #6d6d6d; font-style: italic; }
     .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
     .actions button { padding: 6px 10px; font-size: 12px; }
+    .timeline { display: grid; gap: 8px; margin-top: 8px; }
+    .timeline-item { border-left: 3px solid #d8c3a5; padding-left: 10px; }
+    .muted { color: #6d6d6d; font-size: 12px; }
     pre { white-space: pre-wrap; background: #faf7f2; padding: 8px; border-radius: 8px; }
   </style>
 </head>
@@ -1114,11 +1182,13 @@ class EmailAnalysisApp {
     ${renderStat(labels.stats.risk, state.overview.risks)}
     ${renderStat(labels.stats.waiting, state.overview.waitingForMe)}
     ${renderStat(labels.stats.notice, state.overview.notices)}
+    ${renderStat(labels.stats.threads, threadStore.items.length)}
   </div>
   ${pendingHtml}
   ${mustHandleHtml}
   ${blockedHtml}
   ${rows}
+  ${threadsHtml}
   <script>
     const vscode = acquireVsCodeApi();
     const previousState = vscode.getState() || {};
@@ -1200,8 +1270,14 @@ function renderStat(label: string, value: number | undefined): string {
   return `<div class="stat"><div>${escapeHtml(label)}</div><div class="value">${escapeHtml(String(value || 0))}</div></div>`;
 }
 
-function renderCategory(category: string, items: AnalysisResult["items"], labels: DashboardLabels, categoryLabels: Record<string, string>): string {
-  const cards = items.length ? items.map((item) => renderCard(item, labels)).join("") : `<div class="empty">${escapeHtml(labels.card.noItems)}</div>`;
+function renderCategory(
+  category: string,
+  items: AnalysisResult["items"],
+  labels: DashboardLabels,
+  categoryLabels: Record<string, string>,
+  threadByMailId: Map<string, string>
+): string {
+  const cards = items.length ? items.map((item) => renderCard(item, labels, threadByMailId)).join("") : `<div class="empty">${escapeHtml(labels.card.noItems)}</div>`;
   const open = category === "mustHandleToday" ? " open" : "";
   return `<details class="category"${open}><summary>${escapeHtml(categoryLabels[category] || labels.categories[category] || category)} (${items.length})</summary><div class="category-body">${cards}</div></details>`;
 }
@@ -1212,13 +1288,18 @@ function renderPendingPanel(
   classifications: ClassificationCache,
   labels: DashboardLabels,
   allowedItems: StoredMail[],
-  blocked: boolean
+  blocked: boolean,
+  threadByMailId: Map<string, string>
 ): string {
   const allowed = new Set(allowedItems.map((item) => item.mailId));
   const cards = items.length ? items.map((item) => {
     const classification = classificationFor(item.mailId, classifications);
     const status = blocked || !allowed.has(item.mailId) ? labels.pending.manualRequired : labels.pending.autoAllowed;
-    return `<article class="card pending-card">
+    const threadId = threadByMailId.get(item.mailId) || "";
+    const threadHtml = threadId
+      ? `<div><strong>${escapeHtml(labels.card.thread)}:</strong> <a href="#${escapeAttr(domIdForThread(threadId))}">${escapeHtml(threadId)}</a></div>`
+      : "";
+    return `<article class="card pending-card" id="${escapeAttr(domIdForMail(item.mailId))}">
       <div class="header">
         <label class="select-row"><input type="checkbox" data-mail-id="${escapeAttr(item.mailId)}" /> ${escapeHtml(labels.pending.select)}</label>
         <div class="badge">${escapeHtml(status)}</div>
@@ -1227,9 +1308,62 @@ function renderPendingPanel(
       <div><strong>${escapeHtml(labels.card.from)}:</strong> ${escapeHtml(item.from || "-")}</div>
       <div><strong>${escapeHtml(labels.card.received)}:</strong> ${escapeHtml(item.receivedTime || "-")}</div>
       <div><strong>${escapeHtml(labels.pending.classification)}:</strong> ${escapeHtml(formatClassification(classification))}</div>
+      ${threadHtml}
     </article>`;
   }).join("") : `<div class="empty">${escapeHtml(labels.card.noItems)}</div>`;
   return `<details class="category"${blocked ? "" : " open"}><summary>${escapeHtml(title)} (${items.length})</summary><div class="category-body">${cards}</div></details>`;
+}
+
+function renderThreadsPanel(threadStore: ThreadStore, labels: DashboardLabels): string {
+  const threads = [...(threadStore.items || [])].sort((a, b) => String(b.lastTime || "").localeCompare(String(a.lastTime || "")));
+  const cards = threads.length
+    ? threads.map((thread) => renderThreadCard(thread, labels)).join("")
+    : `<div class="empty">${escapeHtml(labels.card.noItems)}</div>`;
+  return `<details class="category" open><summary>${escapeHtml(labels.threads.title)} (${threads.length})</summary><div class="category-body">${cards}</div></details>`;
+}
+
+function renderThreadCard(thread: ThreadStore["items"][number], labels: DashboardLabels): string {
+  const timeline = thread.timeline.length
+    ? thread.timeline.map((message) => {
+      const attachments = message.attachmentNames.length
+        ? `${message.attachmentCount}: ${message.attachmentNames.join(", ")}`
+        : String(message.attachmentCount || 0);
+      return `<div class="timeline-item" id="${escapeAttr(domIdForThreadMessage(thread.threadId, message.mailId))}">
+        <div><strong>${escapeHtml(message.subject || message.mailId)}</strong></div>
+        <div class="muted">${escapeHtml(message.receivedTime || message.sentTime || "-")} · ${escapeHtml(message.from || message.senderEmail || "-")}</div>
+        <div class="muted">${escapeHtml(labels.threads.attachments)}: ${escapeHtml(attachments)}</div>
+        <div class="muted">${escapeHtml(labels.threads.mailIds)}: <a href="#${escapeAttr(domIdForMail(message.mailId))}">${escapeHtml(message.mailId)}</a></div>
+        <pre>${escapeHtml(message.bodyDelta || message.bodyPreview || "")}</pre>
+      </div>`;
+    }).join("")
+    : `<div class="empty">${escapeHtml(labels.card.noItems)}</div>`;
+  return `<article class="card" id="${escapeAttr(domIdForThread(thread.threadId))}">
+    <div class="header">
+      <div class="title">${escapeHtml(thread.subject || thread.threadId)}</div>
+      <div class="badge">${escapeHtml(`${labels.threads.messages}: ${String(thread.messageCount)}`)}</div>
+    </div>
+    <div><strong>${escapeHtml(labels.threads.participants)}:</strong> ${escapeHtml(thread.participants.join(", ") || "-")}</div>
+    <div><strong>${escapeHtml(labels.threads.lastTime)}:</strong> ${escapeHtml(thread.lastTime || "-")}</div>
+    <div><strong>${escapeHtml(labels.threads.folders)}:</strong> ${escapeHtml(thread.folders.join(", ") || "-")}</div>
+    <div><strong>${escapeHtml(labels.threads.contentStatus)}:</strong> ${escapeHtml(thread.contentStatus || "-")}</div>
+    <details>
+      <summary>${escapeHtml(labels.threads.timeline)} (${thread.timeline.length})</summary>
+      <div class="timeline">${timeline}</div>
+    </details>
+  </article>`;
+}
+
+function buildThreadLookup(threadStore: ThreadStore): Map<string, string> {
+  const lookup = new Map<string, string>();
+  for (const thread of threadStore.items || []) {
+    for (const mailId of thread.sourceMailIds || []) {
+      lookup.set(mailId, thread.threadId);
+    }
+    for (const message of thread.timeline || []) {
+      lookup.set(message.mailId, thread.threadId);
+    }
+  }
+  return lookup;
 }
 
 function renderModelOptions(
@@ -1329,10 +1463,14 @@ function renderClassificationOptions(selectedLevel: number, labels: DashboardLab
   }).join("");
 }
 
-function renderCard(item: AnalysisResult["items"][number], labels: DashboardLabels): string {
+function renderCard(item: AnalysisResult["items"][number], labels: DashboardLabels, threadByMailId: Map<string, string>): string {
   const draftReplyLiteral = toJsLiteral(item.draftReply || "");
   const mailIdLiteral = toJsLiteral(item.mailId);
-  return `<article class="card">
+  const threadId = threadByMailId.get(item.mailId) || "";
+  const threadHtml = threadId
+    ? `<div><strong>${escapeHtml(labels.card.thread)}:</strong> <a href="#${escapeAttr(domIdForThread(threadId))}">${escapeHtml(threadId)}</a></div>`
+    : "";
+  return `<article class="card" id="${escapeAttr(domIdForMail(item.mailId))}">
     <div class="header">
       <div class="title">${escapeHtml(item.subject || item.mailId)}</div>
       <div class="badge">${escapeHtml(formatPriority(item.priority, labels))}</div>
@@ -1342,6 +1480,7 @@ function renderCard(item: AnalysisResult["items"][number], labels: DashboardLabe
     <div><strong>${escapeHtml(labels.card.summary)}:</strong> ${escapeHtml(item.summary || "-")}</div>
     <div><strong>${escapeHtml(labels.card.reason)}:</strong> ${escapeHtml(item.reason || "-")}</div>
     <div><strong>${escapeHtml(labels.card.suggestedAction)}:</strong> ${escapeHtml(item.suggestedAction || "-")}</div>
+    ${threadHtml}
     <pre>${escapeHtml(item.draftReply || "")}</pre>
     <div class="actions">
       <button onclick="post('copyDraft', { draftReply: ${draftReplyLiteral} })">${escapeHtml(labels.card.copyDraft)}</button>
@@ -1434,6 +1573,22 @@ function escapeHtml(value: string): string {
 
 function escapeAttr(value: string): string {
   return escapeHtml(value);
+}
+
+function domIdForMail(mailId: string): string {
+  return `mail-${safeDomId(mailId)}`;
+}
+
+function domIdForThread(threadId: string): string {
+  return `thread-${safeDomId(threadId)}`;
+}
+
+function domIdForThreadMessage(threadId: string, mailId: string): string {
+  return `thread-message-${safeDomId(threadId)}-${safeDomId(mailId)}`;
+}
+
+function safeDomId(value: string): string {
+  return String(value || "").replace(/[^A-Za-z0-9_-]/g, "-");
 }
 
 function selected(current: unknown, expected: unknown): string {

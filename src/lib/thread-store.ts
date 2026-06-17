@@ -37,6 +37,50 @@ export function pruneThreadStore(store: ThreadStore, retentionDays: number, now:
   };
 }
 
+export function mergeThreadStores(existing: ThreadStore, incoming: ThreadStore): ThreadStore {
+  const byId = new Map<string, ThreadRecord>();
+  for (const item of existing.items || []) {
+    byId.set(item.threadId, item);
+  }
+  for (const item of incoming.items || []) {
+    byId.set(item.threadId, mergeThreadRecord(byId.get(item.threadId), item));
+  }
+
+  return {
+    generatedAt: existing.generatedAt || incoming.generatedAt || new Date().toISOString(),
+    lastBuiltAt: incoming.lastBuiltAt || existing.lastBuiltAt || "",
+    items: [...byId.values()].sort(compareThreadRecords)
+  };
+}
+
+function mergeThreadRecord(existing: ThreadRecord | undefined, incoming: ThreadRecord): ThreadRecord {
+  if (!existing) {
+    return incoming;
+  }
+  const timelineById = new Map<string, ThreadMessage>();
+  for (const item of existing.timeline || []) {
+    timelineById.set(item.mailId, item);
+  }
+  for (const item of incoming.timeline || []) {
+    timelineById.set(item.mailId, item);
+  }
+  const timeline = [...timelineById.values()].sort(compareThreadMessages);
+  return normalizeThreadRecord({
+    ...existing,
+    ...incoming,
+    participants: unique([...(existing.participants || []), ...(incoming.participants || [])]),
+    folders: unique([...(existing.folders || []), ...(incoming.folders || [])]),
+    sourceMailIds: unique([...(existing.sourceMailIds || []), ...(incoming.sourceMailIds || [])]),
+    timeline,
+    messageCount: timeline.length,
+    unreadCount: Math.max(existing.unreadCount || 0, incoming.unreadCount || 0),
+    hasAttachments: existing.hasAttachments || incoming.hasAttachments,
+    startTime: firstTimelineTime(timeline),
+    lastTime: latestTimelineTimeString(timeline),
+    contentStatus: normalizeContentStatus("", timeline)
+  }) as ThreadRecord;
+}
+
 function normalizeThreadRecord(input: unknown): ThreadRecord | null {
   if (!isObject(input)) {
     return null;
@@ -150,8 +194,41 @@ function latestTimelineTime(timeline: ThreadMessage[]): number {
   return latest;
 }
 
+function latestTimelineTimeString(timeline: ThreadMessage[]): string {
+  let latest = "";
+  let latestValue = NaN;
+  for (const item of timeline) {
+    const value = parseDate(item.receivedTime) || parseDate(item.sentTime);
+    if (!Number.isFinite(value)) {
+      continue;
+    }
+    if (!Number.isFinite(latestValue) || value > latestValue) {
+      latestValue = value;
+      latest = item.receivedTime || item.sentTime;
+    }
+  }
+  return latest || lastTimelineTime(timeline);
+}
+
+function compareThreadRecords(a: ThreadRecord, b: ThreadRecord): number {
+  const byTime = String(b.lastTime || "").localeCompare(String(a.lastTime || ""));
+  return byTime || a.threadId.localeCompare(b.threadId);
+}
+
+function compareThreadMessages(a: ThreadMessage, b: ThreadMessage): number {
+  if (a.conversationIndex && b.conversationIndex && a.conversationIndex !== b.conversationIndex) {
+    return a.conversationIndex.localeCompare(b.conversationIndex);
+  }
+  const byTime = String(a.receivedTime || a.sentTime || "").localeCompare(String(b.receivedTime || b.sentTime || ""));
+  return byTime || a.mailId.localeCompare(b.mailId);
+}
+
 function stringArray(input: unknown): string[] {
   return Array.isArray(input) ? input.map((item) => String(item || "").trim()).filter(Boolean) : [];
+}
+
+function unique(values: string[]): string[] {
+  return [...new Set(values.filter(Boolean))];
 }
 
 function positiveNumber(input: unknown, fallback: number): number {

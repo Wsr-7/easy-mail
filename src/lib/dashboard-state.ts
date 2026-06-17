@@ -1,5 +1,6 @@
 import type { AnalysisResult } from "./analysis-schema";
 import type { DigestData } from "./digest";
+import type { ThreadStore } from "./thread-store";
 
 export const CATEGORY_ORDER = [
   "mustHandleToday",
@@ -29,6 +30,7 @@ export interface DashboardState {
   digestMetadata: DigestData["metadata"];
   overview: AnalysisResult["overview"];
   categories: DashboardCategory[];
+  threadStore?: ThreadStore;
 }
 
 export function buildDashboardState(
@@ -36,7 +38,8 @@ export function buildDashboardState(
   digest: DigestData,
   analysis: AnalysisResult,
   ignoredIds: string[],
-  categoryOrder: readonly string[] = CATEGORY_ORDER
+  categoryOrder: readonly string[] = CATEGORY_ORDER,
+  threadStore?: ThreadStore
 ): DashboardState {
   const ignored = new Set(ignoredIds || []);
   const items = (analysis?.items || [])
@@ -53,7 +56,8 @@ export function buildDashboardState(
     config,
     digestMetadata: digest?.metadata || { generatedAt: "", rangeMode: "", recentHours: 0, maxItems: 0, folders: [] },
     overview: analysis?.overview || { totalMails: 0, mustHandleToday: 0, risks: 0, waitingForMe: 0, notices: 0 },
-    categories
+    categories,
+    threadStore
   };
 }
 

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildThreadRecords, buildThreadStore } from "../lib/thread-engine";
-import { normalizeThreadStore, pruneThreadStore } from "../lib/thread-store";
+import { mergeThreadStores, normalizeThreadStore, pruneThreadStore } from "../lib/thread-store";
 import type { StoredMail } from "../lib/mail-store";
 
 type ThreadCapableStoredMail = StoredMail & {
@@ -190,6 +190,32 @@ test("pruneThreadStore can fall back to timeline time", () => {
 
   const pruned = pruneThreadStore(store, 7, new Date("2026-06-17T00:00:00"));
   assert.deepEqual(pruned.items.map((item) => item.threadId), ["new"]);
+});
+
+test("mergeThreadStores preserves existing thread messages when new pulls add to the same thread", () => {
+  const existing = buildThreadStore([
+    mail({
+      mailId: "mail-1",
+      conversationId: "conv-1",
+      conversationIndex: "0001",
+      receivedTime: "2026-06-16 09:00:00"
+    })
+  ], "2026-06-16T10:00:00.000Z");
+  const incoming = buildThreadStore([
+    mail({
+      mailId: "mail-2",
+      conversationId: "conv-1",
+      conversationIndex: "0002",
+      receivedTime: "2026-06-16 10:00:00"
+    })
+  ], "2026-06-16T11:00:00.000Z");
+
+  const merged = mergeThreadStores(existing, incoming);
+
+  assert.equal(merged.items.length, 1);
+  assert.equal(merged.items[0].messageCount, 2);
+  assert.deepEqual(merged.items[0].timeline.map((item) => item.mailId), ["mail-1", "mail-2"]);
+  assert.equal(merged.lastBuiltAt, "2026-06-16T11:00:00.000Z");
 });
 
 function mail(overrides: Partial<ThreadCapableStoredMail>): ThreadCapableStoredMail {

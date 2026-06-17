@@ -72,3 +72,19 @@
 - `scripts/collect-outlook-mails.vbs`、`src/lib/digest.ts`、`src/lib/mail-store.ts` 归 Thread Data Agent。
 - `src/lib/thread-store.ts` / `src/lib/thread-engine.ts` 归 Thread Engine Agent。
 - `src/lib/thread-timeline.ts` 归 Thread Timeline Agent。
+
+## v0.3 Wave 1 Integration: Thread Timeline MVP
+
+- [x] pull mail 后写入 `thread-store.json`
+- [x] `thread-store` 合并新旧线程，避免分析后清空 `mail-store` 导致线程上下文立即丢失
+- [x] clear local cache 同步清空 thread store
+- [x] Dashboard 显示 Threads 面板和 thread 统计
+- [x] 邮件卡片显示所属 thread，并可跳转到 thread card
+- [x] Thread timeline mailId 可跳回邮件卡片
+- [x] `npm test` 通过
+
+### Working Notes
+
+- 本轮只完成 v0.3 Thread Timeline 阅读能力，不调用 Copilot 做 Thread AI。
+- 没有新增 Outlook 写回能力，仍保持只读。
+- `src/extension.ts` 只做 thread-store 接入和 dashboard render 扩展。
