@@ -16,6 +16,9 @@ import { buildMailGateDecision, buildThreadGateDecision } from "./lib/security-g
 import type { SecurityGateDecisionResult, SecurityGateSettings } from "./lib/security-types";
 import { buildThreadAnalysisPrompt } from "./lib/thread-prompt-builder";
 import { normalizeThreadAnalysis, parseThreadAnalysisJson, type ThreadAnalysisResult } from "./lib/thread-analysis-schema";
+import { buildDailyBrief } from "./lib/report-daily";
+import { buildSingleMailReport } from "./lib/report-single-mail";
+import { buildThreadReport } from "./lib/report-thread";
 
 type Locale = "zh-CN" | "en-US";
 
@@ -40,7 +43,7 @@ type PromptSendResult = {
 };
 
 type DashboardLabels = {
-  toolbar: Record<"pullMail" | "loadMore" | "sample" | "analyze" | "analyzeSelected" | "analyzeAllAllowed" | "refresh" | "openDigest" | "openSummary" | "settingsFile" | "promptConfig" | "clearStore", string>;
+  toolbar: Record<"pullMail" | "loadMore" | "sample" | "analyze" | "analyzeSelected" | "analyzeAllAllowed" | "refresh" | "openDigest" | "openSummary" | "generateReports" | "openDailyBrief" | "openThreadReport" | "openSingleMailReport" | "settingsFile" | "promptConfig" | "clearStore", string>;
   settings: {
     title: string;
     range: string;
@@ -75,7 +78,7 @@ type DashboardLabels = {
   card: Record<"from" | "received" | "summary" | "reason" | "suggestedAction" | "copyDraft" | "ignore" | "noItems" | "thread", string>;
   pending: Record<"title" | "blockedTitle" | "classification" | "autoAllowed" | "manualRequired" | "gateBlocked" | "securityReason" | "select", string>;
   threads: Record<"title" | "participants" | "messages" | "lastTime" | "folders" | "contentStatus" | "security" | "analysis" | "analyzeThread" | "currentStatus" | "actionItems" | "risks" | "draftReply" | "timeline" | "attachments" | "mailIds", string>;
-  progress: Record<"pullMail" | "loadMore" | "sampleDigest" | "analyze", string> & { detail: string };
+  progress: Record<"pullMail" | "loadMore" | "sampleDigest" | "analyze" | "reports", string> & { detail: string };
   model: Record<"fallback" | "preferred", string>;
 };
 
@@ -91,6 +94,10 @@ const LABELS: Record<Locale, DashboardLabels> = {
       refresh: "刷新",
       openDigest: "打开邮件摘要",
       openSummary: "打开分析总结",
+      generateReports: "生成报告",
+      openDailyBrief: "打开日报",
+      openThreadReport: "打开线程报告",
+      openSingleMailReport: "打开单封报告",
       settingsFile: "配置文件",
       promptConfig: "Prompt 分类配置",
       clearStore: "清理本地缓存"
@@ -196,6 +203,7 @@ const LABELS: Record<Locale, DashboardLabels> = {
       loadMore: "正在加载历史邮件",
       sampleDigest: "正在生成示例数据",
       analyze: "正在调用 Copilot 分析",
+      reports: "正在生成报告",
       detail: "任务进行中，请稍候..."
     },
     model: {
@@ -214,6 +222,10 @@ const LABELS: Record<Locale, DashboardLabels> = {
       refresh: "Refresh",
       openDigest: "Open Digest",
       openSummary: "Open Summary",
+      generateReports: "Generate Reports",
+      openDailyBrief: "Open Daily Brief",
+      openThreadReport: "Open Thread Report",
+      openSingleMailReport: "Open Mail Report",
       settingsFile: "Settings File",
       promptConfig: "Prompt Config",
       clearStore: "Clear Local Cache"
@@ -319,6 +331,7 @@ const LABELS: Record<Locale, DashboardLabels> = {
       loadMore: "Loading mail history",
       sampleDigest: "Generating sample digest",
       analyze: "Analyzing with Copilot",
+      reports: "Generating reports",
       detail: "Task is running. Please wait..."
     },
     model: {
@@ -346,6 +359,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("emailAnalysis.refreshDashboard", () => app.refresh()),
     vscode.commands.registerCommand("emailAnalysis.openDigest", () => app.openDigest()),
     vscode.commands.registerCommand("emailAnalysis.openSummary", () => app.openSummary()),
+    vscode.commands.registerCommand("emailAnalysis.generateReports", () => app.generateReports()),
+    vscode.commands.registerCommand("emailAnalysis.openDailyBrief", () => app.openDailyBrief()),
+    vscode.commands.registerCommand("emailAnalysis.openThreadReport", () => app.openThreadReport()),
+    vscode.commands.registerCommand("emailAnalysis.openSingleMailReport", () => app.openSingleMailReport()),
     vscode.commands.registerCommand("emailAnalysis.openSettings", () => app.openSettings()),
     vscode.commands.registerCommand("emailAnalysis.openPromptConfig", () => app.openPromptConfig()),
     vscode.commands.registerCommand("emailAnalysis.clearLocalCache", () => app.clearLocalCache())
@@ -671,6 +688,30 @@ class EmailAnalysisApp {
     await openTextDocument(this.getSummaryPath());
   }
 
+  public async generateReports(): Promise<void> {
+    const locale = await this.readLocale();
+    const labels = getLabels(locale);
+    await this.runWithBusy(labels.progress.reports, labels.progress.detail, async () => {
+      await this.generateReportsCore();
+    });
+    await vscode.window.showInformationMessage("Email analysis reports generated.");
+  }
+
+  public async openDailyBrief(): Promise<void> {
+    await this.ensureReportsExist();
+    await openTextDocument(this.getDailyBriefPath());
+  }
+
+  public async openThreadReport(): Promise<void> {
+    await this.ensureReportsExist();
+    await openTextDocument(this.getThreadReportPath());
+  }
+
+  public async openSingleMailReport(): Promise<void> {
+    await this.ensureReportsExist();
+    await openTextDocument(this.getSingleMailReportPath());
+  }
+
   public async openSettings(): Promise<void> {
     await vscode.commands.executeCommand("workbench.action.openSettings", "@ext:Wsr-7.email-analysis-poc");
   }
@@ -686,8 +727,36 @@ class EmailAnalysisApp {
     await this.writeClassificationCache(normalizeClassificationCache({}));
     await fs.promises.writeFile(this.getAnalysisPath(), `${JSON.stringify({ generatedAt: "", overview: { totalMails: 0, mustHandleToday: 0, risks: 0, waitingForMe: 0, notices: 0 }, items: [] }, null, 2)}\n`, "utf8");
     await this.writeThreadAnalysisResult({ generatedAt: "", overview: { totalThreads: 0, mustHandleToday: 0, risks: 0, waitingForMe: 0, notices: 0 }, items: [] });
+    await deleteFileIfExists(this.getDailyBriefPath());
+    await deleteFileIfExists(this.getThreadReportPath());
+    await deleteFileIfExists(this.getSingleMailReportPath());
     await this.refresh();
     await vscode.window.showInformationMessage("Local email cache cleared.");
+  }
+
+  private async generateReportsCore(): Promise<void> {
+    await fs.promises.mkdir(this.getDataDir(), { recursive: true });
+    const mailResult = await this.readAnalysisResult();
+    const threadResult = await this.readThreadAnalysisResult();
+    const dateLabel = new Date().toISOString().slice(0, 10);
+    await fs.promises.writeFile(this.getDailyBriefPath(), buildDailyBrief(mailResult, threadResult, dateLabel), "utf8");
+    await fs.promises.writeFile(this.getThreadReportPath(), buildThreadReport(threadResult), "utf8");
+    await fs.promises.writeFile(this.getSingleMailReportPath(), buildSingleMailReport(mailResult), "utf8");
+    await this.log("reports:generated", {
+      mailItems: mailResult.items.length,
+      threadItems: threadResult.items.length
+    });
+  }
+
+  private async ensureReportsExist(): Promise<void> {
+    if (
+      fs.existsSync(this.getDailyBriefPath())
+      && fs.existsSync(this.getThreadReportPath())
+      && fs.existsSync(this.getSingleMailReportPath())
+    ) {
+      return;
+    }
+    await this.generateReportsCore();
   }
 
   private getDataDir(): string {
@@ -712,6 +781,18 @@ class EmailAnalysisApp {
 
   private getSummaryPath(): string {
     return path.join(this.getDataDir(), "mail-summary.md");
+  }
+
+  private getDailyBriefPath(): string {
+    return path.join(this.getDataDir(), "daily-brief.md");
+  }
+
+  private getThreadReportPath(): string {
+    return path.join(this.getDataDir(), "thread-report.md");
+  }
+
+  private getSingleMailReportPath(): string {
+    return path.join(this.getDataDir(), "single-mail-report.md");
   }
 
   private getIgnoredPath(): string {
@@ -1077,6 +1158,26 @@ class EmailAnalysisApp {
       return;
     }
 
+    if (typed.type === "generateReports") {
+      await this.generateReports();
+      return;
+    }
+
+    if (typed.type === "openDailyBrief") {
+      await this.openDailyBrief();
+      return;
+    }
+
+    if (typed.type === "openThreadReport") {
+      await this.openThreadReport();
+      return;
+    }
+
+    if (typed.type === "openSingleMailReport") {
+      await this.openSingleMailReport();
+      return;
+    }
+
     if (typed.type === "pullMail") {
       await this.pullMail(false);
       return;
@@ -1274,6 +1375,10 @@ class EmailAnalysisApp {
     <div class="toolbar-group">
       <button class="secondary" onclick="post('openDigest')">${escapeHtml(labels.toolbar.openDigest)}</button>
       <button class="secondary" onclick="post('openSummary')">${escapeHtml(labels.toolbar.openSummary)}</button>
+      <button class="secondary" onclick="post('generateReports')">${escapeHtml(labels.toolbar.generateReports)}</button>
+      <button class="secondary" onclick="post('openDailyBrief')">${escapeHtml(labels.toolbar.openDailyBrief)}</button>
+      <button class="secondary" onclick="post('openThreadReport')">${escapeHtml(labels.toolbar.openThreadReport)}</button>
+      <button class="secondary" onclick="post('openSingleMailReport')">${escapeHtml(labels.toolbar.openSingleMailReport)}</button>
     </div>
     <div class="toolbar-group">
       <button class="ghost" onclick="post('openSettings')">${escapeHtml(labels.toolbar.settingsFile)}</button>
@@ -2028,6 +2133,14 @@ function toJsLiteral(value: string): string {
 
 function formatError(error: unknown): string {
   return error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+}
+
+async function deleteFileIfExists(filePath: string): Promise<void> {
+  await fs.promises.unlink(filePath).catch((error: NodeJS.ErrnoException) => {
+    if (error.code !== "ENOENT") {
+      throw error;
+    }
+  });
 }
 
 function sanitizeProcessArgs(args: string[]): string[] {

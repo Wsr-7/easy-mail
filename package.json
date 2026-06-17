@@ -23,6 +23,10 @@
     "onCommand:emailAnalysis.analyze",
     "onCommand:emailAnalysis.analyzeThread",
     "onCommand:emailAnalysis.analyzeAllAllowed",
+    "onCommand:emailAnalysis.generateReports",
+    "onCommand:emailAnalysis.openDailyBrief",
+    "onCommand:emailAnalysis.openThreadReport",
+    "onCommand:emailAnalysis.openSingleMailReport",
     "onCommand:emailAnalysis.clearLocalCache",
     "onView:emailAnalysis.dashboard"
   ],
@@ -300,6 +304,22 @@
       {
         "command": "emailAnalysis.openSummary",
         "title": "Email Analysis: Open Summary"
+      },
+      {
+        "command": "emailAnalysis.generateReports",
+        "title": "Email Analysis: Generate Reports"
+      },
+      {
+        "command": "emailAnalysis.openDailyBrief",
+        "title": "Email Analysis: Open Daily Brief"
+      },
+      {
+        "command": "emailAnalysis.openThreadReport",
+        "title": "Email Analysis: Open Thread Report"
+      },
+      {
+        "command": "emailAnalysis.openSingleMailReport",
+        "title": "Email Analysis: Open Single Mail Report"
       },
       {
         "command": "emailAnalysis.openSettings",

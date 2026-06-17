@@ -147,3 +147,21 @@
 
 - 本阶段仍然不做 Provider abstraction。
 - Reports 生成器已存在，但暂不接 Dashboard / commands。
+
+## Wave 3.5: Reports Integration
+
+- [x] 新增 Daily Brief / Thread Report / Single Mail Report 生成入口
+- [x] Dashboard 增加报告生成和打开按钮
+- [x] 报告写入本地 `data/*.md`
+- [x] 运行 `npm test`
+
+### Working Notes
+
+- 本切片只接入现有 report 纯模块，不做 Provider abstraction。
+- 报告只消费已分析结果，不读取 `mail-store` 原始正文。
+
+### Results
+
+- 新增 `Generate Reports` / `Open Daily Brief` / `Open Thread Report` / `Open Single Mail Report` 命令和 Dashboard 按钮。
+- 报告文件输出到本地 data 目录：`daily-brief.md`、`thread-report.md`、`single-mail-report.md`。
+- `npm test` 通过。
