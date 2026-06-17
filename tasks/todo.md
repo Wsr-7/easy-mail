@@ -105,3 +105,18 @@
 - 本阶段先不接 `src/extension.ts`，不改变现有 Single Mail 分析入口。
 - `classification.ts` 保持为 Security Gate 的输入，不推倒重写。
 - Wave 2 Integration 已接入 redacted payload、block/manual_confirm 行为和 Dashboard 安全状态。
+
+## v0.5 Wave 3: Thread AI Foundation
+
+- [x] 当前状态：`main` 已同步远端，Wave 2 完成且工作树干净
+- [x] 决策：先做 Thread AI schema / prompt builder 纯模块，不接 UI / Copilot
+- [x] 新增 `thread-analysis-schema.ts` 和 schema tests
+- [x] 新增 `thread-prompt-builder.ts`、thread prompts 和 prompt builder tests
+- [x] 运行 `npm test`
+- [x] 提交 v0.5 foundation 小提交
+
+### Working Notes
+
+- 本切片不修改 `src/extension.ts`，避免把 Thread AI command、Dashboard 和 Copilot 调用一次性混入。
+- Thread prompt 输入使用 JSON-like timeline，不复用 single mail Markdown digest。
+- Provider abstraction 仍然推迟到 Thread AI 跑通之后。

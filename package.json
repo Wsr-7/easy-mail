@@ -312,7 +312,7 @@
   },
   "scripts": {
     "compile": "node scripts/clean-out.js && tsc -p .",
-    "test": "npm run compile && node --test out/test/digest.test.js out/test/analysis-schema.test.js out/test/summary.test.js out/test/dashboard-state.test.js out/test/mail-store.test.js out/test/classification.test.js out/test/prompt-config.test.js out/test/thread-engine.test.js out/test/thread-timeline.test.js out/test/redaction.test.js out/test/security-gate.test.js",
+    "test": "npm run compile && node --test out/test/digest.test.js out/test/analysis-schema.test.js out/test/summary.test.js out/test/dashboard-state.test.js out/test/mail-store.test.js out/test/classification.test.js out/test/prompt-config.test.js out/test/thread-engine.test.js out/test/thread-timeline.test.js out/test/redaction.test.js out/test/security-gate.test.js out/test/thread-analysis-schema.test.js out/test/thread-prompt-builder.test.js",
     "package:vsix": "npm run compile && vsce package --out releases/email-analysis-poc-0.1.0.vsix",
     "package:vsix:dev": "node scripts/package-dev-vsix.js",
     "validate:sample": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-sample-validation.ps1"
