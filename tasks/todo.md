@@ -95,9 +95,13 @@
 - [x] Wave 2F：新增 Security Gate 纯模块和单测
 - [x] Wave 2：统一接入测试脚本并运行 `npm test`
 - [x] Wave 2：提交纯模块小提交
+- [x] Wave 2 Integration：分析入口过滤 block，手动选择允许 manual_confirm
+- [x] Wave 2 Integration：AI payload 使用 redacted mail digest
+- [x] Wave 2 Integration：Dashboard 显示 mail/thread security 状态
+- [x] Wave 2 Integration：统一验证 `npm test`
 
 ### Working Notes
 
 - 本阶段先不接 `src/extension.ts`，不改变现有 Single Mail 分析入口。
 - `classification.ts` 保持为 Security Gate 的输入，不推倒重写。
-- Wave 2 Integration 才接入 redacted payload、block/manual_confirm 行为和 Dashboard 安全状态。
+- Wave 2 Integration 已接入 redacted payload、block/manual_confirm 行为和 Dashboard 安全状态。

@@ -4,13 +4,16 @@ import * as path from "node:path";
 import * as cp from "node:child_process";
 import { parseDigest, type DigestData } from "./lib/digest";
 import { normalizeAnalysis, parseAnalysisJson, type AnalysisResult } from "./lib/analysis-schema";
-import { buildQueueState, classificationFor, ensureClassifications, normalizeClassificationCache, type ClassificationCache } from "./lib/classification";
+import { buildQueueState, classificationFor, ensureClassifications, normalizeClassificationCache, type ClassificationCache, type MailClassification } from "./lib/classification";
 import { buildSummaryMarkdown } from "./lib/summary";
 import { buildDashboardState, CATEGORY_ORDER, type DashboardState } from "./lib/dashboard-state";
 import { allowedCategoryIds, composeAnalysisPrompt, normalizePromptConfig, type PromptConfig } from "./lib/prompt-config";
 import { buildBatchDigestMarkdown, emptyMailIndex, emptyMailStore, folderOldestReceivedTimes, mergeDigestIntoIndex, mergeDigestIntoStore, normalizeMailIndex, normalizeMailStore, pruneMailIndex, pruneMailStore, removeStoredMailByIds, type MailIndex, type MailStore, type StoredMail } from "./lib/mail-store";
 import { buildThreadStore } from "./lib/thread-engine";
 import { emptyThreadStore, mergeThreadStores, normalizeThreadStore, pruneThreadStore, type ThreadStore } from "./lib/thread-store";
+import { redactText, type RedactionPolicy } from "./lib/redaction";
+import { buildMailGateDecision, buildThreadGateDecision } from "./lib/security-gate";
+import type { SecurityGateDecisionResult, SecurityGateSettings } from "./lib/security-types";
 
 type Locale = "zh-CN" | "en-US";
 
@@ -26,6 +29,8 @@ type AvailableModel = {
   name: string;
   vendor: string;
 };
+
+type SecurityDecisionMap = Map<string, SecurityGateDecisionResult>;
 
 type DashboardLabels = {
   toolbar: Record<"pullMail" | "loadMore" | "sample" | "analyze" | "analyzeSelected" | "analyzeAllAllowed" | "refresh" | "openDigest" | "openSummary" | "settingsFile" | "promptConfig" | "clearStore", string>;
@@ -61,8 +66,8 @@ type DashboardLabels = {
   stats: Record<"pulled" | "pending" | "analysed" | "blocked" | "mustHandle" | "risk" | "waiting" | "notice" | "threads", string>;
   categories: Record<string, string>;
   card: Record<"from" | "received" | "summary" | "reason" | "suggestedAction" | "copyDraft" | "ignore" | "noItems" | "thread", string>;
-  pending: Record<"title" | "blockedTitle" | "classification" | "autoAllowed" | "manualRequired" | "select", string>;
-  threads: Record<"title" | "participants" | "messages" | "lastTime" | "folders" | "contentStatus" | "timeline" | "attachments" | "mailIds", string>;
+  pending: Record<"title" | "blockedTitle" | "classification" | "autoAllowed" | "manualRequired" | "gateBlocked" | "securityReason" | "select", string>;
+  threads: Record<"title" | "participants" | "messages" | "lastTime" | "folders" | "contentStatus" | "security" | "timeline" | "attachments" | "mailIds", string>;
   progress: Record<"pullMail" | "loadMore" | "sampleDigest" | "analyze", string> & { detail: string };
   model: Record<"fallback" | "preferred", string>;
 };
@@ -157,6 +162,8 @@ const LABELS: Record<Locale, DashboardLabels> = {
       classification: "密级",
       autoAllowed: "允许自动分析",
       manualRequired: "需要手动确认",
+      gateBlocked: "安全阻断",
+      securityReason: "安全原因",
       select: "选择"
     },
     threads: {
@@ -166,6 +173,7 @@ const LABELS: Record<Locale, DashboardLabels> = {
       lastTime: "最后时间",
       folders: "文件夹",
       contentStatus: "内容状态",
+      security: "安全状态",
       timeline: "时间线",
       attachments: "附件",
       mailIds: "邮件 ID"
@@ -271,6 +279,8 @@ const LABELS: Record<Locale, DashboardLabels> = {
       classification: "Classification",
       autoAllowed: "Auto allowed",
       manualRequired: "Manual confirmation required",
+      gateBlocked: "Blocked by security gate",
+      securityReason: "Security reason",
       select: "Select"
     },
     threads: {
@@ -280,6 +290,7 @@ const LABELS: Record<Locale, DashboardLabels> = {
       lastTime: "Last Time",
       folders: "Folders",
       contentStatus: "Content Status",
+      security: "Security",
       timeline: "Timeline",
       attachments: "Attachments",
       mailIds: "Mail IDs"
@@ -452,6 +463,8 @@ class EmailAnalysisApp {
     await this.writeClassificationCache(classificationCache);
     const currentAnalysis = await this.readAnalysisResult();
     const ignoredIds = await this.readIgnoredIds();
+    const securitySettings = buildSecuritySettings(config);
+    const securityDecisions = buildMailSecurityDecisionMap(store.items, classificationCache, securitySettings);
     const queue = buildQueueState(
       store.items,
       currentAnalysis,
@@ -461,23 +474,37 @@ class EmailAnalysisApp {
       Number(config.autoAnalyzeMaxClassificationLevel || 2)
     );
     const batchSize = Number(config.analysisBatchSize || 5);
-    const batch = Array.isArray(selection)
+    const requestedBatch = Array.isArray(selection)
       ? store.items.filter((item) => selection.includes(item.mailId) && !ignoredIds.includes(item.mailId))
       : selection === "allAllowed"
         ? queue.allowed
         : queue.allowed.slice(0, batchSize);
+    const batch = requestedBatch.filter((item) => canAnalyzeMail(item, securityDecisions, Array.isArray(selection)));
     if (!batch.length) {
-      await this.log("analyze:noBatch", { pending: queue.pending.length, allowed: queue.allowed.length, blocked: queue.blocked.length });
-      throw new Error("No mail is available for analysis. Check pending mail or classification gates.");
+      await this.log("analyze:noBatch", {
+        pending: queue.pending.length,
+        allowed: queue.allowed.length,
+        blocked: queue.blocked.length,
+        requested: requestedBatch.length,
+        securityBlocked: requestedBatch.filter((item) => securityDecisions.get(item.mailId)?.decision === "block").length
+      });
+      throw new Error("No mail is available for analysis. Check pending mail or security gates.");
     }
 
     const promptConfig = await this.readPromptConfig();
     promptConfig.importantSenders = mergeStringLists(promptConfig.importantSenders, parseFolders(config.importantSenders, []));
-    const digestText = buildBatchDigestMarkdown(batch);
+    const redacted = redactStoredMails(batch, buildDefaultRedactionPolicy());
+    const digestText = buildBatchDigestMarkdown(redacted.items);
     const basePrompt = await fs.promises.readFile(path.join(this.context.extensionPath, "prompts", "base-system.md"), "utf8");
     const outputSchemaPrompt = await fs.promises.readFile(path.join(this.context.extensionPath, "prompts", "output-schema.md"), "utf8");
     const configuredModel = typeof config.modelFamily === "string" ? config.modelFamily.trim() : "gpt-5.4";
-    await this.log("analyze:start", { selection: Array.isArray(selection) ? "selected" : selection || "nextBatch", batchSize: batch.length, configuredModel });
+    await this.log("analyze:start", {
+      selection: Array.isArray(selection) ? "selected" : selection || "nextBatch",
+      requestedBatchSize: requestedBatch.length,
+      batchSize: batch.length,
+      redactionReplacements: redacted.totalReplacements,
+      configuredModel
+    });
     const models = await vscode.lm.selectChatModels({ vendor: "copilot" });
     const selectedModelIndex = selectConfiguredModelIndex(models.map(modelToAvailableModel), configuredModel);
     const selectedModel = selectedModelIndex >= 0 ? models[selectedModelIndex] : undefined;
@@ -865,9 +892,18 @@ class EmailAnalysisApp {
     const index = pruneMailIndex(await this.readMailIndex(), Number(config.mailIndexRetentionDays || 7));
     await this.writeMailIndex(index);
     const threadStore = pruneThreadStore(await this.readThreadStore(), Number(config.mailStoreRetentionDays || 1));
-    await this.writeThreadStore(threadStore);
     const classifications = ensureClassifications(store.items, await this.readClassificationCache());
     await this.writeClassificationCache(classifications);
+    const securitySettings = buildSecuritySettings(config);
+    const securityDecisions = buildMailSecurityDecisionMap(store.items, classifications, securitySettings);
+    const securedThreadStore: ThreadStore = {
+      ...threadStore,
+      items: threadStore.items.map((thread) => ({
+        ...thread,
+        security: buildThreadGateDecision(thread, classifications.items, securitySettings).summary
+      }))
+    };
+    await this.writeThreadStore(securedThreadStore);
     const queue = buildQueueState(
       store.items,
       analysis,
@@ -876,12 +912,13 @@ class EmailAnalysisApp {
       config.autoAnalyzeEnabled !== false,
       Number(config.autoAnalyzeMaxClassificationLevel || 2)
     );
-    const state = buildDashboardState(config, digest, analysis, ignoredIds, allowedCategoryIds(promptConfig), threadStore) as DashboardState & {
+    const state = buildDashboardState(config, digest, analysis, ignoredIds, allowedCategoryIds(promptConfig), securedThreadStore) as DashboardState & {
       modelInfo?: Record<string, unknown>;
       store?: MailStore;
       index?: MailIndex;
       queue?: ReturnType<typeof buildQueueState>;
       classifications?: ClassificationCache;
+      securityDecisions?: SecurityDecisionMap;
       promptConfig?: PromptConfig;
       threadStore?: ThreadStore;
     };
@@ -890,8 +927,9 @@ class EmailAnalysisApp {
     state.index = index;
     state.queue = queue;
     state.classifications = classifications;
+    state.securityDecisions = securityDecisions;
     state.promptConfig = promptConfig;
-    state.threadStore = threadStore;
+    state.threadStore = securedThreadStore;
     return state;
   }
 
@@ -1020,6 +1058,7 @@ class EmailAnalysisApp {
       index?: MailIndex;
       queue?: ReturnType<typeof buildQueueState>;
       classifications?: ClassificationCache;
+      securityDecisions?: SecurityDecisionMap;
       promptConfig?: PromptConfig;
       threadStore?: ThreadStore;
     };
@@ -1040,13 +1079,14 @@ class EmailAnalysisApp {
     const index = extendedState.index || emptyMailIndex();
     const queue = extendedState.queue || { pending: [], blocked: [], analysed: [], allowed: [] };
     const classifications = extendedState.classifications || normalizeClassificationCache({});
+    const securityDecisions = extendedState.securityDecisions || new Map<string, SecurityGateDecisionResult>();
     const availableModels = await this.readAvailableModels();
     const configuredModel = String(config.modelFamily || "");
     const canAnalyze = !!selectConfiguredModel(availableModels, configuredModel);
     const analysisDisabled = canAnalyze ? "" : " disabled";
     const modelOptions = renderModelOptions(availableModels, configuredModel, labels);
-    const pendingHtml = renderPendingPanel(labels.pending.title, queue.pending, classifications, labels, queue.allowed, false, threadByMailId);
-    const blockedHtml = renderPendingPanel(labels.pending.blockedTitle, queue.blocked, classifications, labels, [], true, threadByMailId);
+    const pendingHtml = renderPendingPanel(labels.pending.title, queue.pending, classifications, labels, queue.allowed, false, threadByMailId, securityDecisions);
+    const blockedHtml = renderPendingPanel(labels.pending.blockedTitle, queue.blocked, classifications, labels, [], true, threadByMailId, securityDecisions);
     const threadsHtml = renderThreadsPanel(threadStore, labels);
     const configuredFolders = Array.isArray(config.folders) ? config.folders.map(String) : ["Inbox"];
     const hasHistoryAnchors = Object.keys(folderOldestReceivedTimes(index, configuredFolders)).length > 0;
@@ -1289,12 +1329,17 @@ function renderPendingPanel(
   labels: DashboardLabels,
   allowedItems: StoredMail[],
   blocked: boolean,
-  threadByMailId: Map<string, string>
+  threadByMailId: Map<string, string>,
+  securityDecisions: SecurityDecisionMap
 ): string {
   const allowed = new Set(allowedItems.map((item) => item.mailId));
   const cards = items.length ? items.map((item) => {
     const classification = classificationFor(item.mailId, classifications);
-    const status = blocked || !allowed.has(item.mailId) ? labels.pending.manualRequired : labels.pending.autoAllowed;
+    const gateDecision = securityDecisions.get(item.mailId);
+    const status = formatGateStatus(gateDecision, blocked || !allowed.has(item.mailId), labels);
+    const reason = gateDecision?.reasons.length
+      ? `<div><strong>${escapeHtml(labels.pending.securityReason)}:</strong> ${escapeHtml(gateDecision.reasons.join("; "))}</div>`
+      : "";
     const threadId = threadByMailId.get(item.mailId) || "";
     const threadHtml = threadId
       ? `<div><strong>${escapeHtml(labels.card.thread)}:</strong> <a href="#${escapeAttr(domIdForThread(threadId))}">${escapeHtml(threadId)}</a></div>`
@@ -1308,6 +1353,7 @@ function renderPendingPanel(
       <div><strong>${escapeHtml(labels.card.from)}:</strong> ${escapeHtml(item.from || "-")}</div>
       <div><strong>${escapeHtml(labels.card.received)}:</strong> ${escapeHtml(item.receivedTime || "-")}</div>
       <div><strong>${escapeHtml(labels.pending.classification)}:</strong> ${escapeHtml(formatClassification(classification))}</div>
+      ${reason}
       ${threadHtml}
     </article>`;
   }).join("") : `<div class="empty">${escapeHtml(labels.card.noItems)}</div>`;
@@ -1346,6 +1392,7 @@ function renderThreadCard(thread: ThreadStore["items"][number], labels: Dashboar
     <div><strong>${escapeHtml(labels.threads.lastTime)}:</strong> ${escapeHtml(thread.lastTime || "-")}</div>
     <div><strong>${escapeHtml(labels.threads.folders)}:</strong> ${escapeHtml(thread.folders.join(", ") || "-")}</div>
     <div><strong>${escapeHtml(labels.threads.contentStatus)}:</strong> ${escapeHtml(thread.contentStatus || "-")}</div>
+    <div><strong>${escapeHtml(labels.threads.security)}:</strong> ${escapeHtml(formatThreadSecurity(thread.security))}</div>
     <details>
       <summary>${escapeHtml(labels.threads.timeline)} (${thread.timeline.length})</summary>
       <div class="timeline">${timeline}</div>
@@ -1625,6 +1672,28 @@ function formatClassification(classification: ReturnType<typeof classificationFo
   return `${classification.label} (${classification.level})`;
 }
 
+function formatGateStatus(decision: SecurityGateDecisionResult | undefined, fallbackManual: boolean, labels: DashboardLabels): string {
+  if (decision?.decision === "block") {
+    return labels.pending.gateBlocked;
+  }
+  if (decision?.decision === "manual_confirm" || fallbackManual) {
+    return labels.pending.manualRequired;
+  }
+  return labels.pending.autoAllowed;
+}
+
+function formatThreadSecurity(security: ThreadStore["items"][number]["security"]): string {
+  if (!security) {
+    return "-";
+  }
+  return [
+    `allow ${security.allowedMessages}`,
+    `manual ${security.manualConfirmMessages}`,
+    `block ${security.blockedMessages}`,
+    security.partialContext ? "partial" : ""
+  ].filter(Boolean).join(" / ");
+}
+
 function mergeAnalysisResults(current: AnalysisResult, next: AnalysisResult, allowedCategories?: string[]): AnalysisResult {
   const byId = new Map<string, AnalysisResult["items"][number]>();
   for (const item of current.items || []) {
@@ -1670,6 +1739,84 @@ function parseFolders(value: unknown, fallback: string[]): string[] {
 
 function mergeStringLists(a: string[], b: string[]): string[] {
   return [...new Set([...(a || []), ...(b || [])].map(String).map((item) => item.trim()).filter(Boolean))];
+}
+
+function buildSecuritySettings(config: Record<string, unknown>): SecurityGateSettings {
+  return {
+    enabled: true,
+    autoAnalyzeEnabled: config.autoAnalyzeEnabled !== false,
+    maxAutoClassificationLevel: Number(config.autoAnalyzeMaxClassificationLevel || 2),
+    maxManualClassificationLevel: 2,
+    hardBlockKeywords: ["password", "api_key", "access_token", "auth_token"],
+    manualConfirmKeywords: []
+  };
+}
+
+function buildDefaultRedactionPolicy(): RedactionPolicy {
+  return {
+    enabled: true,
+    redactEmail: true,
+    redactPhone: true,
+    redactUrl: true,
+    redactIp: true,
+    redactToken: true,
+    redactMoney: true,
+    redactIdLike: true,
+    customPatterns: []
+  };
+}
+
+function buildMailSecurityDecisionMap(
+  mails: StoredMail[],
+  classifications: ClassificationCache,
+  settings: SecurityGateSettings
+): SecurityDecisionMap {
+  const decisions: SecurityDecisionMap = new Map();
+  for (const mail of mails) {
+    decisions.set(mail.mailId, buildMailGateDecision(mail, classificationFor(mail.mailId, classifications) || fallbackClassification(mail.mailId), settings));
+  }
+  return decisions;
+}
+
+function canAnalyzeMail(mail: StoredMail, decisions: SecurityDecisionMap, explicitSelection: boolean): boolean {
+  const decision = decisions.get(mail.mailId);
+  if (!decision) {
+    return true;
+  }
+  if (decision.decision === "block") {
+    return false;
+  }
+  return explicitSelection || decision.decision === "allow";
+}
+
+function redactStoredMails(items: StoredMail[], policy: RedactionPolicy): { items: StoredMail[]; totalReplacements: number } {
+  let totalReplacements = 0;
+  return {
+    items: items.map((item) => {
+      const subject = redactText(item.subject, policy);
+      const from = redactText(item.from, policy);
+      const bodyExcerpt = redactText(item.bodyExcerpt, policy);
+      totalReplacements += subject.stats.totalReplacements + from.stats.totalReplacements + bodyExcerpt.stats.totalReplacements;
+      return {
+        ...item,
+        subject: subject.text,
+        from: from.text,
+        bodyExcerpt: bodyExcerpt.text
+      };
+    }),
+    totalReplacements
+  };
+}
+
+function fallbackClassification(mailId: string): MailClassification {
+  return {
+    mailId,
+    level: 1,
+    label: "INTERNAL",
+    source: "security-gate",
+    reason: "Missing classification defaulted to INTERNAL.",
+    updatedAt: new Date().toISOString()
+  };
 }
 
 function formatModelInfo(modelInfo: Record<string, unknown>, labels: DashboardLabels): string {
