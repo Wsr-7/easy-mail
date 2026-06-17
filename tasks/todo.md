@@ -40,3 +40,18 @@
 - [x] 更新 dashboard 控件和文档
 - [x] 增加测试并打包
 - [x] 提交并推送
+
+## v0.2 / Issue 1: Single Mail Analysis Schema and Evidence
+
+- [x] 目标：只实现 `email-analysis-repo-specific-implementation-plan.md` 中 v0.2 / Issue 1
+- [x] 验收：旧 JSON 仍可解析
+- [x] 验收：新 JSON 中 optional `source` / `evidence` 可保留
+- [x] 验收：summary 可选显示 evidence
+- [x] 验收：`prompts/output-schema.md` 描述新增字段
+- [x] 验收：`npm test` 通过
+
+### Working Notes
+
+- `architecture-background.md` 只作为背景；本轮唯一执行依据是 `docs/v2-design/email-analysis-repo-specific-implementation-plan.md`。
+- 不实现 Issue 2/3，不改 thread/security gate，不打包，除非后续明确要求。
+- 保留 existing single mail analysis pipeline，不改变 category / priority / draft reply 行为。

@@ -28,3 +28,75 @@ test("parseAnalysisJson accepts fenced JSON and normalizes overview", () => {
   assert.equal(analysis.items[0].priority, "P0");
 });
 
+test("parseAnalysisJson preserves optional source and evidence fields", () => {
+  const analysis = parseAnalysisJson(JSON.stringify({
+    generatedAt: "2026-06-16T10:35:00+08:00",
+    items: [
+      {
+        mailId: "mail-001",
+        category: "followUp",
+        priority: "P1",
+        subject: "Follow-up needed",
+        sender: "Alice",
+        receivedTime: "2026-06-16 09:12:00",
+        summary: "Alice asked for a status update.",
+        reason: "Direct request in the mail body.",
+        suggestedAction: "Send status update.",
+        draftReply: "I will send the status update.",
+        confidence: 0.9,
+        needsOriginalMailCheck: false,
+        source: {
+          mailId: "mail-001",
+          internetMessageId: "<message-001@example.com>",
+          entryId: "entry-001",
+          folder: "Inbox"
+        },
+        evidence: [
+          {
+            sourceMailId: "mail-001",
+            quote: "Could you send the current status today?",
+            reason: "Shows the requested action and deadline."
+          }
+        ]
+      }
+    ]
+  }));
+
+  assert.deepEqual(analysis.items[0].source, {
+    mailId: "mail-001",
+    internetMessageId: "<message-001@example.com>",
+    entryId: "entry-001",
+    folder: "Inbox"
+  });
+  assert.deepEqual(analysis.items[0].evidence, [
+    {
+      sourceMailId: "mail-001",
+      quote: "Could you send the current status today?",
+      reason: "Shows the requested action and deadline."
+    }
+  ]);
+});
+
+test("parseAnalysisJson keeps old JSON compatible without source and evidence", () => {
+  const analysis = parseAnalysisJson(JSON.stringify({
+    items: [
+      {
+        mailId: "mail-001",
+        category: "notice",
+        priority: "P3",
+        subject: "Notice",
+        sender: "System",
+        receivedTime: "2026-06-16 09:12:00",
+        summary: "Routine notice.",
+        reason: "No action required.",
+        suggestedAction: "No action.",
+        draftReply: "",
+        confidence: 0.7,
+        needsOriginalMailCheck: false
+      }
+    ]
+  }));
+
+  assert.equal(analysis.items[0].source, undefined);
+  assert.equal(analysis.items[0].evidence, undefined);
+});

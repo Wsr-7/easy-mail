@@ -35,6 +35,15 @@ export function buildSummaryMarkdown(analysis: AnalysisResult, categoryLabels: R
       lines.push(`- Summary: ${item.summary}`);
       lines.push(`- Reason: ${item.reason}`);
       lines.push(`- Suggested Action: ${item.suggestedAction}`);
+      if (item.evidence?.length) {
+        lines.push("- Evidence:");
+        for (const evidence of item.evidence) {
+          const source = evidence.sourceMailId ? `source: ${evidence.sourceMailId}` : "source: unknown";
+          const quote = evidence.quote ? ` quote: ${evidence.quote}` : "";
+          const reason = evidence.reason ? ` reason: ${evidence.reason}` : "";
+          lines.push(`  - ${source}${quote}${reason}`);
+        }
+      }
       lines.push("- Draft Reply:");
       lines.push("");
       lines.push("```text");
