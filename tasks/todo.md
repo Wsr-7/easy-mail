@@ -165,3 +165,24 @@
 - 新增 `Generate Reports` / `Open Daily Brief` / `Open Thread Report` / `Open Single Mail Report` 命令和 Dashboard 按钮。
 - 报告文件输出到本地 data 目录：`daily-brief.md`、`thread-report.md`、`single-mail-report.md`。
 - `npm test` 通过。
+
+## Wave 4: Provider Abstraction
+
+- [x] 新增 `LlmProvider` 接口和模型选择 helpers
+- [x] 新增 `CopilotProvider`，复用当前 `vscode.lm` 行为
+- [x] 新增 `MockProvider` 和 provider unit tests
+- [x] Single Mail AI / Thread AI 统一走 provider
+- [x] 运行 `npm test`
+
+### Working Notes
+
+- 本阶段最后做 Provider abstraction，不再改 Thread AI / Reports 业务逻辑。
+- 不实现复杂 OpenAI-compatible / internal API provider，只预留接口边界。
+- `src/extension.ts` 是高冲突集成文件，由主线程串行修改。
+
+### Results
+
+- 新增 provider 边界：`llm-provider.ts`、`copilot-provider.ts`、`mock-provider.ts`。
+- Dashboard 模型列表与分析发送路径共用同一套模型选择 helper。
+- Single Mail AI 和 Thread AI 继续使用 Copilot，但经由 `LlmProvider` 调用。
+- `npm test` 通过。

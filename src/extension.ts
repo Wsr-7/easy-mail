@@ -19,6 +19,8 @@ import { normalizeThreadAnalysis, parseThreadAnalysisJson, type ThreadAnalysisRe
 import { buildDailyBrief } from "./lib/report-daily";
 import { buildSingleMailReport } from "./lib/report-single-mail";
 import { buildThreadReport } from "./lib/report-thread";
+import { CopilotProvider } from "./lib/copilot-provider";
+import { formatModelLabel, isSelectedModel, modelKey, selectConfiguredModel, type AvailableModel, type LlmProvider } from "./lib/llm-provider";
 
 type Locale = "zh-CN" | "en-US";
 
@@ -28,19 +30,7 @@ type BusyState = {
   startedAt: string;
 };
 
-type AvailableModel = {
-  id: string;
-  family: string;
-  name: string;
-  vendor: string;
-};
-
 type SecurityDecisionMap = Map<string, SecurityGateDecisionResult>;
-
-type PromptSendResult = {
-  raw: string;
-  model: vscode.LanguageModelChat;
-};
 
 type DashboardLabels = {
   toolbar: Record<"pullMail" | "loadMore" | "sample" | "analyze" | "analyzeSelected" | "analyzeAllAllowed" | "refresh" | "openDigest" | "openSummary" | "generateReports" | "openDailyBrief" | "openThreadReport" | "openSingleMailReport" | "settingsFile" | "promptConfig" | "clearStore", string>;
@@ -375,10 +365,12 @@ export function deactivate(): void {}
 
 class EmailAnalysisApp {
   public readonly dashboardProvider: DashboardProvider;
+  private readonly llmProvider: LlmProvider;
   private busy: BusyState | null = null;
   private logFilePath = "";
 
   public constructor(private readonly context: vscode.ExtensionContext) {
+    this.llmProvider = new CopilotProvider();
     this.dashboardProvider = new DashboardProvider(() => this.getDashboardHtml(), (message) => this.handleMessage(message));
   }
 
@@ -554,7 +546,7 @@ class EmailAnalysisApp {
       outputLanguage: String(config.outputLanguage || "en-US"),
       promptConfig
     });
-    const { raw } = await this.sendCopilotPrompt(prompt, configuredModel, "analyze");
+    const { raw } = await this.sendPrompt(prompt, configuredModel, "analyze");
     await this.log("analyze:response", { rawLength: raw.length });
     const analysis = parseAnalysisJson(raw, allowedCategoryIds(promptConfig));
 
@@ -611,7 +603,7 @@ class EmailAnalysisApp {
     });
     const configuredModel = typeof config.modelFamily === "string" ? config.modelFamily.trim() : "gpt-5.4";
     await this.log("threadAnalyze:start", { threadId, configuredModel, partialContext: gate.partialContext });
-    const { raw } = await this.sendCopilotPrompt(prompt, configuredModel, "threadAnalyze");
+    const { raw } = await this.sendPrompt(prompt, configuredModel, "threadAnalyze");
     const parsed = parseThreadAnalysisJson(raw, allowedCategoryIds(await this.readPromptConfig()));
     const current = await this.readThreadAnalysisResult();
     const merged = mergeThreadAnalysisResults(current, parsed, allowedCategoryIds(await this.readPromptConfig()));
@@ -621,10 +613,9 @@ class EmailAnalysisApp {
     await vscode.window.showInformationMessage(`Thread analysis completed for ${thread.subject || thread.threadId}.`);
   }
 
-  private async sendCopilotPrompt(prompt: string, configuredModel: string, eventPrefix: string): Promise<PromptSendResult> {
-    const models = await vscode.lm.selectChatModels({ vendor: "copilot" });
-    const selectedModelIndex = selectConfiguredModelIndex(models.map(modelToAvailableModel), configuredModel);
-    const selectedModel = selectedModelIndex >= 0 ? models[selectedModelIndex] : undefined;
+  private async sendPrompt(prompt: string, configuredModel: string, eventPrefix: string): Promise<{ raw: string }> {
+    const models = await this.llmProvider.listModels();
+    const selectedModel = selectConfiguredModel(models, configuredModel);
     await this.log(`${eventPrefix}:models`, {
       availableCount: models.length,
       selected: selectedModel ? { id: selectedModel.id, family: selectedModel.family, name: selectedModel.name, vendor: selectedModel.vendor } : null
@@ -632,25 +623,20 @@ class EmailAnalysisApp {
     if (!selectedModel) {
       throw new Error("Select an available GitHub Copilot model before analyzing.");
     }
+    const response = await this.llmProvider.sendPrompt(prompt, { modelFamily: configuredModel });
 
     await this.writeModelInfo({
       requestedFamily: configuredModel || "auto",
-      usedFallback: false,
-      actualFamily: selectedModel.family,
-      actualId: selectedModel.id,
-      actualName: selectedModel.name,
-      actualVendor: selectedModel.vendor,
+      usedFallback: response.usedFallback,
+      actualFamily: response.model.family,
+      actualId: response.model.id,
+      actualName: response.model.name,
+      actualVendor: response.model.vendor,
       analyzedAt: new Date().toISOString()
     });
 
-    const response = await selectedModel.sendRequest(
-      [vscode.LanguageModelChatMessage.User(prompt)],
-      {},
-      new vscode.CancellationTokenSource().token
-    );
     return {
-      raw: await readResponseText(response.text),
-      model: selectedModel
+      raw: response.rawText
     };
   }
 
@@ -932,8 +918,7 @@ class EmailAnalysisApp {
 
   private async readAvailableModels(): Promise<AvailableModel[]> {
     try {
-      const models = await vscode.lm.selectChatModels({ vendor: "copilot" });
-      return models.map(modelToAvailableModel);
+      return await this.llmProvider.listModels();
     } catch (error) {
       await this.log("models:error", { error: formatError(error) });
       return [];
@@ -1696,50 +1681,10 @@ function formatRangeMeta(metadata: { rangeMode?: unknown; recentHours?: unknown;
   return "-";
 }
 
-function modelToAvailableModel(model: { id: string; family: string; name: string; vendor: string }): AvailableModel {
-  return {
-    id: String(model.id || ""),
-    family: String(model.family || ""),
-    name: String(model.name || ""),
-    vendor: String(model.vendor || "")
-  };
-}
-
-function selectConfiguredModel(models: AvailableModel[], selectedValue: string): AvailableModel | undefined {
-  const index = selectConfiguredModelIndex(models, selectedValue);
-  return index >= 0 ? models[index] : undefined;
-}
-
-function selectConfiguredModelIndex(models: AvailableModel[], selectedValue: string): number {
-  const selected = String(selectedValue || "").trim();
-  if (!selected) {
-    return -1;
-  }
-  return models.findIndex((model) => isSelectedModel(model, selected));
-}
-
-function isSelectedModel(model: AvailableModel, selectedValue: string): boolean {
-  const selected = String(selectedValue || "").trim().toLowerCase();
-  return [model.id, model.family, model.name, model.vendor, formatModelLabel(model)]
-    .map((value) => String(value || "").trim().toLowerCase())
-    .includes(selected);
-}
-
 function formatSelectedModel(selectedValue: unknown, models: AvailableModel[]): string {
   const selected = String(selectedValue || "");
   const model = selectConfiguredModel(models, selected) as AvailableModel | undefined;
   return model ? formatModelLabel(model) : selected || "-";
-}
-
-function formatModelLabel(model: AvailableModel): string {
-  return [model.vendor, model.family, model.id, model.name]
-    .filter(Boolean)
-    .filter((value, index, values) => values.indexOf(value) === index)
-    .join(" / ");
-}
-
-function modelKey(model: AvailableModel): string {
-  return [model.vendor, model.family, model.id, model.name].join("\u0000");
 }
 
 function renderClassificationOptions(selectedLevel: number, labels: DashboardLabels): string {
@@ -1786,18 +1731,6 @@ async function openTextDocument(filePath: string): Promise<void> {
   }
   const doc = await vscode.workspace.openTextDocument(filePath);
   await vscode.window.showTextDocument(doc, { preview: false });
-}
-
-async function readResponseText(stream: AsyncIterable<unknown>): Promise<string> {
-  let full = "";
-  for await (const part of stream) {
-    if (part && typeof part === "object" && "value" in (part as Record<string, unknown>) && typeof (part as Record<string, unknown>).value === "string") {
-      full += String((part as Record<string, unknown>).value);
-    } else {
-      full += String(part);
-    }
-  }
-  return full;
 }
 
 function runProcess(

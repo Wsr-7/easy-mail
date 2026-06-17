@@ -1,0 +1,61 @@
+export interface AvailableModel {
+  id: string;
+  family: string;
+  name: string;
+  vendor: string;
+}
+
+export interface LlmRequestOptions {
+  modelFamily: string;
+}
+
+export interface LlmResponse {
+  rawText: string;
+  model: AvailableModel;
+  usedFallback: boolean;
+}
+
+export interface LlmProvider {
+  listModels(): Promise<AvailableModel[]>;
+  sendPrompt(prompt: string, options: LlmRequestOptions): Promise<LlmResponse>;
+}
+
+export function normalizeAvailableModel(model: { id?: unknown; family?: unknown; name?: unknown; vendor?: unknown }): AvailableModel {
+  return {
+    id: String(model.id || ""),
+    family: String(model.family || ""),
+    name: String(model.name || ""),
+    vendor: String(model.vendor || "")
+  };
+}
+
+export function selectConfiguredModel(models: AvailableModel[], selectedValue: string): AvailableModel | undefined {
+  const index = selectConfiguredModelIndex(models, selectedValue);
+  return index >= 0 ? models[index] : undefined;
+}
+
+export function selectConfiguredModelIndex(models: AvailableModel[], selectedValue: string): number {
+  const selected = String(selectedValue || "").trim();
+  if (!selected) {
+    return -1;
+  }
+  return models.findIndex((model) => isSelectedModel(model, selected));
+}
+
+export function isSelectedModel(model: AvailableModel, selectedValue: string): boolean {
+  const selected = String(selectedValue || "").trim().toLowerCase();
+  return [model.id, model.family, model.name, model.vendor, formatModelLabel(model)]
+    .map((value) => String(value || "").trim().toLowerCase())
+    .includes(selected);
+}
+
+export function formatModelLabel(model: AvailableModel): string {
+  return [model.vendor, model.family, model.id, model.name]
+    .filter(Boolean)
+    .filter((value, index, values) => values.indexOf(value) === index)
+    .join(" / ");
+}
+
+export function modelKey(model: AvailableModel): string {
+  return [model.vendor, model.family, model.id, model.name].join("\u0000");
+}

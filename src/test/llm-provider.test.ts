@@ -1,0 +1,55 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { formatModelLabel, modelKey, normalizeAvailableModel, selectConfiguredModel, selectConfiguredModelIndex } from "../lib/llm-provider";
+import { MockProvider } from "../lib/mock-provider";
+
+const models = [
+  { vendor: "copilot", family: "gpt-5-mini", id: "copilot-utility", name: "GPT-5 mini" },
+  { vendor: "copilot", family: "gpt-4o-mini", id: "gpt-4o-mini", name: "GPT-4o mini" }
+];
+
+test("selectConfiguredModel matches id, family, name, vendor, and full label", () => {
+  assert.equal(selectConfiguredModelIndex(models, "copilot-utility"), 0);
+  assert.equal(selectConfiguredModelIndex(models, "gpt-5-mini"), 0);
+  assert.equal(selectConfiguredModelIndex(models, "GPT-5 mini"), 0);
+  assert.equal(selectConfiguredModelIndex(models, "copilot / gpt-5-mini / copilot-utility / GPT-5 mini"), 0);
+  assert.equal(selectConfiguredModelIndex(models, "missing-model"), -1);
+  assert.equal(selectConfiguredModel(models, "gpt-4o-mini")?.id, "gpt-4o-mini");
+});
+
+test("formatModelLabel and modelKey keep model identity stable", () => {
+  assert.equal(formatModelLabel(models[0]), "copilot / gpt-5-mini / copilot-utility / GPT-5 mini");
+  assert.equal(modelKey(models[0]), "copilot\u0000gpt-5-mini\u0000copilot-utility\u0000GPT-5 mini");
+});
+
+test("normalizeAvailableModel tolerates missing model fields", () => {
+  assert.deepEqual(normalizeAvailableModel({ family: "gpt-5-mini" }), {
+    id: "",
+    family: "gpt-5-mini",
+    name: "",
+    vendor: ""
+  });
+});
+
+test("MockProvider returns configured models and records prompts", async () => {
+  const provider = new MockProvider({
+    models,
+    responses: ["{\"items\":[]}"]
+  });
+
+  assert.deepEqual(await provider.listModels(), models);
+  const response = await provider.sendPrompt("Analyze this", { modelFamily: "gpt-5-mini" });
+
+  assert.equal(response.rawText, "{\"items\":[]}");
+  assert.equal(response.model.id, "copilot-utility");
+  assert.equal(response.usedFallback, false);
+  assert.deepEqual(provider.prompts, ["Analyze this"]);
+});
+
+test("MockProvider fails when requested model is unavailable", async () => {
+  const provider = new MockProvider({ models });
+  await assert.rejects(
+    () => provider.sendPrompt("Analyze this", { modelFamily: "unavailable" }),
+    /Select an available GitHub Copilot model/
+  );
+});
