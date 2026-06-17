@@ -14,6 +14,8 @@ import { emptyThreadStore, mergeThreadStores, normalizeThreadStore, pruneThreadS
 import { redactText, type RedactionPolicy } from "./lib/redaction";
 import { buildMailGateDecision, buildThreadGateDecision } from "./lib/security-gate";
 import type { SecurityGateDecisionResult, SecurityGateSettings } from "./lib/security-types";
+import { buildThreadAnalysisPrompt } from "./lib/thread-prompt-builder";
+import { normalizeThreadAnalysis, parseThreadAnalysisJson, type ThreadAnalysisResult } from "./lib/thread-analysis-schema";
 
 type Locale = "zh-CN" | "en-US";
 
@@ -31,6 +33,11 @@ type AvailableModel = {
 };
 
 type SecurityDecisionMap = Map<string, SecurityGateDecisionResult>;
+
+type PromptSendResult = {
+  raw: string;
+  model: vscode.LanguageModelChat;
+};
 
 type DashboardLabels = {
   toolbar: Record<"pullMail" | "loadMore" | "sample" | "analyze" | "analyzeSelected" | "analyzeAllAllowed" | "refresh" | "openDigest" | "openSummary" | "settingsFile" | "promptConfig" | "clearStore", string>;
@@ -67,7 +74,7 @@ type DashboardLabels = {
   categories: Record<string, string>;
   card: Record<"from" | "received" | "summary" | "reason" | "suggestedAction" | "copyDraft" | "ignore" | "noItems" | "thread", string>;
   pending: Record<"title" | "blockedTitle" | "classification" | "autoAllowed" | "manualRequired" | "gateBlocked" | "securityReason" | "select", string>;
-  threads: Record<"title" | "participants" | "messages" | "lastTime" | "folders" | "contentStatus" | "security" | "timeline" | "attachments" | "mailIds", string>;
+  threads: Record<"title" | "participants" | "messages" | "lastTime" | "folders" | "contentStatus" | "security" | "analysis" | "analyzeThread" | "currentStatus" | "actionItems" | "risks" | "draftReply" | "timeline" | "attachments" | "mailIds", string>;
   progress: Record<"pullMail" | "loadMore" | "sampleDigest" | "analyze", string> & { detail: string };
   model: Record<"fallback" | "preferred", string>;
 };
@@ -174,6 +181,12 @@ const LABELS: Record<Locale, DashboardLabels> = {
       folders: "文件夹",
       contentStatus: "内容状态",
       security: "安全状态",
+      analysis: "线程分析",
+      analyzeThread: "分析线程",
+      currentStatus: "当前状态",
+      actionItems: "待办",
+      risks: "风险",
+      draftReply: "回复草稿",
       timeline: "时间线",
       attachments: "附件",
       mailIds: "邮件 ID"
@@ -291,6 +304,12 @@ const LABELS: Record<Locale, DashboardLabels> = {
       folders: "Folders",
       contentStatus: "Content Status",
       security: "Security",
+      analysis: "Thread Analysis",
+      analyzeThread: "Analyze Thread",
+      currentStatus: "Current Status",
+      actionItems: "Action Items",
+      risks: "Risks",
+      draftReply: "Draft Reply",
       timeline: "Timeline",
       attachments: "Attachments",
       mailIds: "Mail IDs"
@@ -317,6 +336,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("emailAnalysis.loadMore", () => app.loadMore()),
     vscode.commands.registerCommand("emailAnalysis.generateSampleDigest", () => app.pullMail(true)),
     vscode.commands.registerCommand("emailAnalysis.analyze", () => app.analyze()),
+    vscode.commands.registerCommand("emailAnalysis.analyzeThread", async () => {
+      const threadId = await vscode.window.showInputBox({ prompt: "Thread ID to analyze" });
+      if (threadId) {
+        await app.analyzeThread(threadId);
+      }
+    }),
     vscode.commands.registerCommand("emailAnalysis.analyzeAllAllowed", () => app.analyzeAllAllowed()),
     vscode.commands.registerCommand("emailAnalysis.refreshDashboard", () => app.refresh()),
     vscode.commands.registerCommand("emailAnalysis.openDigest", () => app.openDigest()),
@@ -505,10 +530,85 @@ class EmailAnalysisApp {
       redactionReplacements: redacted.totalReplacements,
       configuredModel
     });
+    const prompt = composeAnalysisPrompt({
+      basePrompt,
+      outputSchemaPrompt,
+      digestText,
+      outputLanguage: String(config.outputLanguage || "en-US"),
+      promptConfig
+    });
+    const { raw } = await this.sendCopilotPrompt(prompt, configuredModel, "analyze");
+    await this.log("analyze:response", { rawLength: raw.length });
+    const analysis = parseAnalysisJson(raw, allowedCategoryIds(promptConfig));
+
+    const normalized = normalizeAnalysis(analysis, allowedCategoryIds(promptConfig));
+    const merged = pruneAnalysisResult(
+      mergeAnalysisResults(currentAnalysis, normalized, allowedCategoryIds(promptConfig)),
+      Number(config.analysisRetentionDays || 7),
+      allowedCategoryIds(promptConfig)
+    );
+    const summaryLabels = buildCategoryLabels(getLabels(getLocaleFromConfig(config)), promptConfig, getLocaleFromConfig(config));
+    await fs.promises.writeFile(this.getAnalysisPath(), `${JSON.stringify(merged, null, 2)}\n`, "utf8");
+    await fs.promises.writeFile(this.getSummaryPath(), buildSummaryMarkdown(merged, summaryLabels), "utf8");
+    await this.writeMailStore(removeStoredMailByIds(await this.readMailStore(), batch.map((item) => item.mailId)));
+    await this.log("analyze:done", { batchSize: batch.length, mergedItems: merged.items.length });
+    await this.refresh();
+    await vscode.window.showInformationMessage(`Email analysis completed for ${batch.length} mail(s).`);
+  }
+
+  public async analyzeThread(threadId: string): Promise<void> {
+    const locale = await this.readLocale();
+    const labels = getLabels(locale);
+    await this.runWithBusy(labels.progress.analyze, labels.progress.detail, async () => {
+      await this.analyzeThreadCore(threadId);
+    });
+  }
+
+  private async analyzeThreadCore(threadId: string): Promise<void> {
+    const config = await this.readConfig();
+    const threadStore = await this.readThreadStore();
+    const thread = threadStore.items.find((item) => item.threadId === threadId);
+    if (!thread) {
+      throw new Error("Thread not found. Refresh or pull mail first.");
+    }
+    if ((thread.security?.blockedMessages || 0) > 0) {
+      await this.log("threadAnalyze:block", { threadId, reasons: thread.security?.reasons || [] });
+      throw new Error("Thread has blocked messages and cannot be analyzed.");
+    }
+    const gate = buildThreadGateDecision(thread, ensureClassifications(await this.readMailStore().then((store) => store.items), await this.readClassificationCache()).items, buildSecuritySettings(config));
+    if (gate.decision === "block") {
+      await this.log("threadAnalyze:block", { threadId, reasons: gate.reasons });
+      throw new Error("Thread is blocked by the security gate.");
+    }
+
+    const redactedThread = redactThreadForPrompt(thread, buildDefaultRedactionPolicy());
+    const basePrompt = await fs.promises.readFile(path.join(this.context.extensionPath, "prompts", "thread-base-system.md"), "utf8");
+    const analysisPrompt = await fs.promises.readFile(path.join(this.context.extensionPath, "prompts", "thread-analysis-prompt.md"), "utf8");
+    const outputSchemaPrompt = await fs.promises.readFile(path.join(this.context.extensionPath, "prompts", "thread-output-schema.md"), "utf8");
+    const prompt = buildThreadAnalysisPrompt({
+      basePrompt,
+      analysisPrompt,
+      outputSchemaPrompt,
+      outputLanguage: String(config.outputLanguage || "en-US"),
+      thread: redactedThread
+    });
+    const configuredModel = typeof config.modelFamily === "string" ? config.modelFamily.trim() : "gpt-5.4";
+    await this.log("threadAnalyze:start", { threadId, configuredModel, partialContext: gate.partialContext });
+    const { raw } = await this.sendCopilotPrompt(prompt, configuredModel, "threadAnalyze");
+    const parsed = parseThreadAnalysisJson(raw, allowedCategoryIds(await this.readPromptConfig()));
+    const current = await this.readThreadAnalysisResult();
+    const merged = mergeThreadAnalysisResults(current, parsed, allowedCategoryIds(await this.readPromptConfig()));
+    await this.writeThreadAnalysisResult(merged);
+    await this.log("threadAnalyze:done", { threadId, mergedItems: merged.items.length });
+    await this.refresh();
+    await vscode.window.showInformationMessage(`Thread analysis completed for ${thread.subject || thread.threadId}.`);
+  }
+
+  private async sendCopilotPrompt(prompt: string, configuredModel: string, eventPrefix: string): Promise<PromptSendResult> {
     const models = await vscode.lm.selectChatModels({ vendor: "copilot" });
     const selectedModelIndex = selectConfiguredModelIndex(models.map(modelToAvailableModel), configuredModel);
     const selectedModel = selectedModelIndex >= 0 ? models[selectedModelIndex] : undefined;
-    await this.log("analyze:models", {
+    await this.log(`${eventPrefix}:models`, {
       availableCount: models.length,
       selected: selectedModel ? { id: selectedModel.id, family: selectedModel.family, name: selectedModel.name, vendor: selectedModel.vendor } : null
     });
@@ -526,35 +626,15 @@ class EmailAnalysisApp {
       analyzedAt: new Date().toISOString()
     });
 
-    const prompt = composeAnalysisPrompt({
-      basePrompt,
-      outputSchemaPrompt,
-      digestText,
-      outputLanguage: String(config.outputLanguage || "en-US"),
-      promptConfig
-    });
     const response = await selectedModel.sendRequest(
       [vscode.LanguageModelChatMessage.User(prompt)],
       {},
       new vscode.CancellationTokenSource().token
     );
-    const raw = await readResponseText(response.text);
-    await this.log("analyze:response", { rawLength: raw.length });
-    const analysis = parseAnalysisJson(raw, allowedCategoryIds(promptConfig));
-
-    const normalized = normalizeAnalysis(analysis, allowedCategoryIds(promptConfig));
-    const merged = pruneAnalysisResult(
-      mergeAnalysisResults(currentAnalysis, normalized, allowedCategoryIds(promptConfig)),
-      Number(config.analysisRetentionDays || 7),
-      allowedCategoryIds(promptConfig)
-    );
-    const summaryLabels = buildCategoryLabels(getLabels(getLocaleFromConfig(config)), promptConfig, getLocaleFromConfig(config));
-    await fs.promises.writeFile(this.getAnalysisPath(), `${JSON.stringify(merged, null, 2)}\n`, "utf8");
-    await fs.promises.writeFile(this.getSummaryPath(), buildSummaryMarkdown(merged, summaryLabels), "utf8");
-    await this.writeMailStore(removeStoredMailByIds(await this.readMailStore(), batch.map((item) => item.mailId)));
-    await this.log("analyze:done", { batchSize: batch.length, mergedItems: merged.items.length });
-    await this.refresh();
-    await vscode.window.showInformationMessage(`Email analysis completed for ${batch.length} mail(s).`);
+    return {
+      raw: await readResponseText(response.text),
+      model: selectedModel
+    };
   }
 
   private async runWithBusy<T>(label: string, detail: string, task: () => Promise<T>): Promise<T> {
@@ -605,6 +685,7 @@ class EmailAnalysisApp {
     await this.writeThreadStore(emptyThreadStore());
     await this.writeClassificationCache(normalizeClassificationCache({}));
     await fs.promises.writeFile(this.getAnalysisPath(), `${JSON.stringify({ generatedAt: "", overview: { totalMails: 0, mustHandleToday: 0, risks: 0, waitingForMe: 0, notices: 0 }, items: [] }, null, 2)}\n`, "utf8");
+    await this.writeThreadAnalysisResult({ generatedAt: "", overview: { totalThreads: 0, mustHandleToday: 0, risks: 0, waitingForMe: 0, notices: 0 }, items: [] });
     await this.refresh();
     await vscode.window.showInformationMessage("Local email cache cleared.");
   }
@@ -623,6 +704,10 @@ class EmailAnalysisApp {
 
   private getAnalysisPath(): string {
     return path.join(this.getDataDir(), "analysis-result.json");
+  }
+
+  private getThreadAnalysisPath(): string {
+    return path.join(this.getDataDir(), "thread-analysis-result.json");
   }
 
   private getSummaryPath(): string {
@@ -791,6 +876,25 @@ class EmailAnalysisApp {
     }
   }
 
+  private async readThreadAnalysisResult(): Promise<ThreadAnalysisResult> {
+    if (!fs.existsSync(this.getThreadAnalysisPath())) {
+      return { generatedAt: "", overview: { totalThreads: 0, mustHandleToday: 0, risks: 0, waitingForMe: 0, notices: 0 }, items: [] };
+    }
+    try {
+      const promptConfig = await this.readPromptConfig();
+      return normalizeThreadAnalysis(
+        JSON.parse(await fs.promises.readFile(this.getThreadAnalysisPath(), "utf8")),
+        allowedCategoryIds(promptConfig)
+      );
+    } catch {
+      return { generatedAt: "", overview: { totalThreads: 0, mustHandleToday: 0, risks: 0, waitingForMe: 0, notices: 0 }, items: [] };
+    }
+  }
+
+  private async writeThreadAnalysisResult(result: ThreadAnalysisResult): Promise<void> {
+    await fs.promises.writeFile(this.getThreadAnalysisPath(), `${JSON.stringify(result, null, 2)}\n`, "utf8");
+  }
+
   private async readMailStore(): Promise<MailStore> {
     if (!fs.existsSync(this.getMailStorePath())) {
       return emptyMailStore();
@@ -887,6 +991,7 @@ class EmailAnalysisApp {
       : { metadata: { generatedAt: "", rangeMode: "", recentHours: 0, maxItems: 0, folders: [] }, items: [] };
     const promptConfig = await this.readPromptConfig();
     const analysis = await this.readAnalysisResult();
+    const threadAnalysis = await this.readThreadAnalysisResult();
     const ignoredIds = await this.readIgnoredIds();
     const store = await this.readMailStore();
     const index = pruneMailIndex(await this.readMailIndex(), Number(config.mailIndexRetentionDays || 7));
@@ -921,6 +1026,7 @@ class EmailAnalysisApp {
       securityDecisions?: SecurityDecisionMap;
       promptConfig?: PromptConfig;
       threadStore?: ThreadStore;
+      threadAnalysis?: ThreadAnalysisResult;
     };
     state.modelInfo = await this.readModelInfo();
     state.store = store;
@@ -930,6 +1036,7 @@ class EmailAnalysisApp {
     state.securityDecisions = securityDecisions;
     state.promptConfig = promptConfig;
     state.threadStore = securedThreadStore;
+    state.threadAnalysis = threadAnalysis;
     return state;
   }
 
@@ -938,7 +1045,7 @@ class EmailAnalysisApp {
       return;
     }
 
-    const typed = message as { type?: string; draftReply?: string; mailId?: string; mailIds?: string[]; config?: unknown };
+    const typed = message as { type?: string; draftReply?: string; mailId?: string; mailIds?: string[]; threadId?: string; config?: unknown };
     if (typed.type === "copyDraft") {
       await vscode.env.clipboard.writeText(String(typed.draftReply || ""));
       await vscode.window.showInformationMessage("Draft reply copied.");
@@ -997,6 +1104,11 @@ class EmailAnalysisApp {
 
     if (typed.type === "analyzeSelected") {
       await this.analyzeSelected(Array.isArray(typed.mailIds) ? typed.mailIds.map(String) : []);
+      return;
+    }
+
+    if (typed.type === "analyzeThread" && typed.threadId) {
+      await this.analyzeThread(String(typed.threadId));
       return;
     }
 
@@ -1061,6 +1173,7 @@ class EmailAnalysisApp {
       securityDecisions?: SecurityDecisionMap;
       promptConfig?: PromptConfig;
       threadStore?: ThreadStore;
+      threadAnalysis?: ThreadAnalysisResult;
     };
     const locale = getLocaleFromConfig(config);
     const labels = getLabels(locale);
@@ -1068,6 +1181,7 @@ class EmailAnalysisApp {
     promptConfig.importantSenders = mergeStringLists(promptConfig.importantSenders, parseFolders(config.importantSenders, []));
     const categoryLabels = buildCategoryLabels(labels, promptConfig, locale);
     const threadStore = extendedState.threadStore || emptyThreadStore();
+    const threadAnalysis = extendedState.threadAnalysis || { generatedAt: "", overview: { totalThreads: 0, mustHandleToday: 0, risks: 0, waitingForMe: 0, notices: 0 }, items: [] };
     const threadByMailId = buildThreadLookup(threadStore);
     const categoryHtml = new Map(state.categories.map((entry) => [entry.id, renderCategory(entry.id, entry.items, labels, categoryLabels, threadByMailId)]));
     const mustHandleHtml = categoryHtml.get("mustHandleToday") || "";
@@ -1087,7 +1201,7 @@ class EmailAnalysisApp {
     const modelOptions = renderModelOptions(availableModels, configuredModel, labels);
     const pendingHtml = renderPendingPanel(labels.pending.title, queue.pending, classifications, labels, queue.allowed, false, threadByMailId, securityDecisions);
     const blockedHtml = renderPendingPanel(labels.pending.blockedTitle, queue.blocked, classifications, labels, [], true, threadByMailId, securityDecisions);
-    const threadsHtml = renderThreadsPanel(threadStore, labels);
+    const threadsHtml = renderThreadsPanel(threadStore, labels, threadAnalysis);
     const configuredFolders = Array.isArray(config.folders) ? config.folders.map(String) : ["Inbox"];
     const hasHistoryAnchors = Object.keys(folderOldestReceivedTimes(index, configuredFolders)).length > 0;
     const loadMoreDisabled = hasHistoryAnchors ? "" : " disabled";
@@ -1360,15 +1474,16 @@ function renderPendingPanel(
   return `<details class="category"${blocked ? "" : " open"}><summary>${escapeHtml(title)} (${items.length})</summary><div class="category-body">${cards}</div></details>`;
 }
 
-function renderThreadsPanel(threadStore: ThreadStore, labels: DashboardLabels): string {
+function renderThreadsPanel(threadStore: ThreadStore, labels: DashboardLabels, threadAnalysis: ThreadAnalysisResult): string {
   const threads = [...(threadStore.items || [])].sort((a, b) => String(b.lastTime || "").localeCompare(String(a.lastTime || "")));
+  const analysisByThreadId = new Map((threadAnalysis.items || []).map((item) => [item.threadId, item]));
   const cards = threads.length
-    ? threads.map((thread) => renderThreadCard(thread, labels)).join("")
+    ? threads.map((thread) => renderThreadCard(thread, labels, analysisByThreadId.get(thread.threadId))).join("")
     : `<div class="empty">${escapeHtml(labels.card.noItems)}</div>`;
   return `<details class="category" open><summary>${escapeHtml(labels.threads.title)} (${threads.length})</summary><div class="category-body">${cards}</div></details>`;
 }
 
-function renderThreadCard(thread: ThreadStore["items"][number], labels: DashboardLabels): string {
+function renderThreadCard(thread: ThreadStore["items"][number], labels: DashboardLabels, analysis?: ThreadAnalysisResult["items"][number]): string {
   const timeline = thread.timeline.length
     ? thread.timeline.map((message) => {
       const attachments = message.attachmentNames.length
@@ -1393,6 +1508,8 @@ function renderThreadCard(thread: ThreadStore["items"][number], labels: Dashboar
     <div><strong>${escapeHtml(labels.threads.folders)}:</strong> ${escapeHtml(thread.folders.join(", ") || "-")}</div>
     <div><strong>${escapeHtml(labels.threads.contentStatus)}:</strong> ${escapeHtml(thread.contentStatus || "-")}</div>
     <div><strong>${escapeHtml(labels.threads.security)}:</strong> ${escapeHtml(formatThreadSecurity(thread.security))}</div>
+    <div class="actions"><button class="secondary" onclick="post('analyzeThread', { threadId: ${toJsLiteral(thread.threadId)} })">${escapeHtml(labels.threads.analyzeThread)}</button></div>
+    ${renderThreadAnalysisSummary(analysis, labels)}
     <details>
       <summary>${escapeHtml(labels.threads.timeline)} (${thread.timeline.length})</summary>
       <div class="timeline">${timeline}</div>
@@ -1411,6 +1528,28 @@ function buildThreadLookup(threadStore: ThreadStore): Map<string, string> {
     }
   }
   return lookup;
+}
+
+function renderThreadAnalysisSummary(analysis: ThreadAnalysisResult["items"][number] | undefined, labels: DashboardLabels): string {
+  if (!analysis) {
+    return "";
+  }
+  const actionItems = analysis.actionItems.length
+    ? `<ul>${analysis.actionItems.map((item) => `<li>${escapeHtml([item.owner, item.task, item.deadline].filter(Boolean).join(": ") || "-")}</li>`).join("")}</ul>`
+    : `<div class="empty">${escapeHtml(labels.card.noItems)}</div>`;
+  const risks = analysis.risks.length
+    ? `<ul>${analysis.risks.map((risk) => `<li>${escapeHtml(`${risk.level}: ${risk.description}`)}</li>`).join("")}</ul>`
+    : `<div class="empty">${escapeHtml(labels.card.noItems)}</div>`;
+  const draft = analysis.draftReply ? `<pre>${escapeHtml(analysis.draftReply)}</pre>` : "";
+  return `<details open>
+    <summary>${escapeHtml(labels.threads.analysis)} (${escapeHtml(analysis.priority)} / ${escapeHtml(analysis.category)})</summary>
+    <div class="timeline">
+      <div><strong>${escapeHtml(labels.threads.currentStatus)}:</strong> ${escapeHtml(analysis.currentStatus || analysis.oneLineSummary || "-")}</div>
+      <div><strong>${escapeHtml(labels.threads.actionItems)}:</strong>${actionItems}</div>
+      <div><strong>${escapeHtml(labels.threads.risks)}:</strong>${risks}</div>
+      ${draft ? `<div><strong>${escapeHtml(labels.threads.draftReply)}:</strong>${draft}</div>` : ""}
+    </div>
+  </details>`;
 }
 
 function renderModelOptions(
@@ -1808,6 +1947,25 @@ function redactStoredMails(items: StoredMail[], policy: RedactionPolicy): { item
   };
 }
 
+function redactThreadForPrompt(thread: ThreadStore["items"][number], policy: RedactionPolicy): ThreadStore["items"][number] {
+  return {
+    ...thread,
+    subject: redactText(thread.subject, policy).text,
+    participants: thread.participants.map((participant) => redactText(participant, policy).text),
+    timeline: thread.timeline.map((message) => ({
+      ...message,
+      subject: redactText(message.subject, policy).text,
+      from: redactText(message.from, policy).text,
+      senderName: redactText(message.senderName, policy).text,
+      senderEmail: redactText(message.senderEmail, policy).text,
+      bodyPreview: redactText(message.bodyPreview, policy).text,
+      bodyClean: redactText(message.bodyClean, policy).text,
+      bodyDelta: redactText(message.bodyDelta, policy).text,
+      attachmentNames: message.attachmentNames.map((name) => redactText(name, policy).text)
+    }))
+  };
+}
+
 function fallbackClassification(mailId: string): MailClassification {
   return {
     mailId,
@@ -1817,6 +1975,21 @@ function fallbackClassification(mailId: string): MailClassification {
     reason: "Missing classification defaulted to INTERNAL.",
     updatedAt: new Date().toISOString()
   };
+}
+
+function mergeThreadAnalysisResults(current: ThreadAnalysisResult, next: ThreadAnalysisResult, allowedCategories?: string[]): ThreadAnalysisResult {
+  const byId = new Map<string, ThreadAnalysisResult["items"][number]>();
+  for (const item of current.items || []) {
+    byId.set(item.threadId, item);
+  }
+  for (const item of next.items || []) {
+    byId.set(item.threadId, item);
+  }
+  return normalizeThreadAnalysis({
+    generatedAt: new Date().toISOString(),
+    overview: {},
+    items: [...byId.values()]
+  }, allowedCategories);
 }
 
 function formatModelInfo(modelInfo: Record<string, unknown>, labels: DashboardLabels): string {

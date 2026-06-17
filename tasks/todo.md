@@ -133,3 +133,17 @@
 
 - Reports 只消费已分析结果字段，不读取 mail-store 原始正文。
 - Reports 暂不接 Dashboard / commands，留给后续 Integration Agent 决定入口。
+
+## v0.5 Wave 3 Integration: Thread AI
+
+- [x] 新增 `thread-analysis-result.json` 读写
+- [x] 新增 `Analyze Thread` command / Dashboard 入口
+- [x] Thread AI prompt 使用 redacted timeline
+- [x] blocked thread 不进入模型
+- [x] Dashboard 展示 Thread Analysis 摘要
+- [x] 运行 `npm test`
+
+### Working Notes
+
+- 本阶段仍然不做 Provider abstraction。
+- Reports 生成器已存在，但暂不接 Dashboard / commands。

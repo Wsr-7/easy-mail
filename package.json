@@ -21,6 +21,7 @@
     "onCommand:emailAnalysis.loadMore",
     "onCommand:emailAnalysis.generateSampleDigest",
     "onCommand:emailAnalysis.analyze",
+    "onCommand:emailAnalysis.analyzeThread",
     "onCommand:emailAnalysis.analyzeAllAllowed",
     "onCommand:emailAnalysis.clearLocalCache",
     "onView:emailAnalysis.dashboard"
@@ -279,6 +280,10 @@
       {
         "command": "emailAnalysis.analyze",
         "title": "Email Analysis: Analyze Next Batch with Copilot"
+      },
+      {
+        "command": "emailAnalysis.analyzeThread",
+        "title": "Email Analysis: Analyze Thread with Copilot"
       },
       {
         "command": "emailAnalysis.analyzeAllAllowed",
