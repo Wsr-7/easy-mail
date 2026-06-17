@@ -42,20 +42,22 @@ export function buildDashboardState(
   threadStore?: ThreadStore
 ): DashboardState {
   const ignored = new Set(ignoredIds || []);
-  const items = (analysis?.items || [])
-    .filter((item) => !ignored.has(item.mailId))
-    .sort(compareItems);
+  const allItems = (analysis?.items || []).sort(compareItems);
+  const items = allItems.filter((item) => !ignored.has(item.mailId));
+  const ignoredItems = allItems.filter((item) => ignored.has(item.mailId));
 
-  const dynamicCategories = unique([...categoryOrder, ...items.map((item) => item.category)]);
+  const dynamicCategories = unique([...categoryOrder, ...items.map((item) => item.category), "ignored"]);
   const categories = dynamicCategories.map((category) => ({
     id: category,
-    items: items.filter((item) => item.category === category)
+    items: category === "ignored"
+      ? ignoredItems
+      : items.filter((item) => item.category === category)
   }));
 
   return {
     config,
     digestMetadata: digest?.metadata || { generatedAt: "", rangeMode: "", recentHours: 0, maxItems: 0, folders: [] },
-    overview: analysis?.overview || { totalMails: 0, mustHandleToday: 0, risks: 0, waitingForMe: 0, notices: 0 },
+    overview: buildOverview(items),
     categories,
     threadStore
   };
@@ -71,4 +73,14 @@ function compareItems(a: AnalysisResult["items"][number], b: AnalysisResult["ite
     return byPriority;
   }
   return String(b.receivedTime || "").localeCompare(String(a.receivedTime || ""));
+}
+
+function buildOverview(items: AnalysisResult["items"]): AnalysisResult["overview"] {
+  return {
+    totalMails: items.length,
+    mustHandleToday: items.filter((item) => item.category === "mustHandleToday").length,
+    risks: items.filter((item) => item.category === "risk").length,
+    waitingForMe: items.filter((item) => item.category === "waitingForMe").length,
+    notices: items.filter((item) => item.category === "notice").length
+  };
 }

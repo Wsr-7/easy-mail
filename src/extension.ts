@@ -20,7 +20,7 @@ import { buildDailyBrief } from "./lib/report-daily";
 import { buildSingleMailReport } from "./lib/report-single-mail";
 import { buildThreadReport } from "./lib/report-thread";
 import { CopilotProvider } from "./lib/copilot-provider";
-import { formatModelLabel, isSelectedModel, modelKey, selectConfiguredModel, type AvailableModel, type LlmProvider } from "./lib/llm-provider";
+import { formatModelLabel, isSelectedModel, modelKey, normalizeAvailableModel, selectConfiguredModel, type AvailableModel, type LlmProvider } from "./lib/llm-provider";
 
 type Locale = "zh-CN" | "en-US";
 
@@ -33,7 +33,7 @@ type BusyState = {
 type SecurityDecisionMap = Map<string, SecurityGateDecisionResult>;
 
 type DashboardLabels = {
-  toolbar: Record<"pullMail" | "loadMore" | "sample" | "analyze" | "analyzeSelected" | "analyzeAllAllowed" | "refresh" | "openDigest" | "openSummary" | "generateReports" | "openDailyBrief" | "openThreadReport" | "openSingleMailReport" | "settingsFile" | "promptConfig" | "clearStore", string>;
+  toolbar: Record<"pullMail" | "loadMore" | "sample" | "analyze" | "analyzeSelected" | "analyzeAllAllowed" | "refresh" | "openDigest" | "openSummary" | "generateReports" | "openDailyBrief" | "openThreadReport" | "openSingleMailReport" | "settingsFile" | "promptConfig" | "clearStore" | "loadModels", string>;
   settings: {
     title: string;
     range: string;
@@ -45,6 +45,7 @@ type DashboardLabels = {
     bodyCharsHelp: string;
     modelFamily: string;
     noModel: string;
+    modelsNotLoaded: string;
     batchSize: string;
     autoAnalyze: string;
     maxClassification: string;
@@ -57,6 +58,7 @@ type DashboardLabels = {
     analysisRetentionDays: string;
     importantSenders: string;
     save: string;
+    autoSaveNote: string;
     recentHoursOption: string;
     maxItemsOption: string;
     zhOption: string;
@@ -68,7 +70,7 @@ type DashboardLabels = {
   card: Record<"from" | "received" | "summary" | "reason" | "suggestedAction" | "copyDraft" | "ignore" | "noItems" | "thread", string>;
   pending: Record<"title" | "blockedTitle" | "classification" | "autoAllowed" | "manualRequired" | "gateBlocked" | "securityReason" | "select", string>;
   threads: Record<"title" | "participants" | "messages" | "lastTime" | "folders" | "contentStatus" | "security" | "analysis" | "analyzeThread" | "currentStatus" | "actionItems" | "risks" | "draftReply" | "timeline" | "attachments" | "mailIds", string>;
-  progress: Record<"pullMail" | "loadMore" | "sampleDigest" | "analyze" | "reports", string> & { detail: string };
+  progress: Record<"pullMail" | "loadMore" | "sampleDigest" | "analyze" | "reports" | "loadModels", string> & { detail: string };
   model: Record<"fallback" | "preferred", string>;
 };
 
@@ -90,7 +92,8 @@ const LABELS: Record<Locale, DashboardLabels> = {
       openSingleMailReport: "打开单封报告",
       settingsFile: "配置文件",
       promptConfig: "Prompt 分类配置",
-      clearStore: "清理本地缓存"
+      clearStore: "清理本地缓存",
+      loadModels: "加载模型"
     },
     settings: {
       title: "设置",
@@ -103,6 +106,7 @@ const LABELS: Record<Locale, DashboardLabels> = {
       bodyCharsHelp: "限制每封邮件送给 Copilot 的正文长度，避免分析过慢或上下文过大。",
       modelFamily: "Analysis Model",
       noModel: "没有可用模型",
+      modelsNotLoaded: "请先加载模型",
       batchSize: "每批分析数量",
       autoAnalyze: "允许自动分析",
       maxClassification: "自动分析最高密级",
@@ -115,6 +119,7 @@ const LABELS: Record<Locale, DashboardLabels> = {
       analysisRetentionDays: "分析摘要保留天数",
       importantSenders: "重点发件人/邮件组（用 ; 分隔）",
       save: "保存设置",
+      autoSaveNote: "修改后会自动保存到 VS Code Settings",
       recentHoursOption: "最近小时数",
       maxItemsOption: "最多邮件数",
       zhOption: "简体中文",
@@ -194,6 +199,7 @@ const LABELS: Record<Locale, DashboardLabels> = {
       sampleDigest: "正在生成示例数据",
       analyze: "正在调用 Copilot 分析",
       reports: "正在生成报告",
+      loadModels: "正在加载 Copilot 模型",
       detail: "任务进行中，请稍候..."
     },
     model: {
@@ -218,7 +224,8 @@ const LABELS: Record<Locale, DashboardLabels> = {
       openSingleMailReport: "Open Mail Report",
       settingsFile: "Settings File",
       promptConfig: "Prompt Config",
-      clearStore: "Clear Local Cache"
+      clearStore: "Clear Local Cache",
+      loadModels: "Load Models"
     },
     settings: {
       title: "Settings",
@@ -231,6 +238,7 @@ const LABELS: Record<Locale, DashboardLabels> = {
       bodyCharsHelp: "Limits how many body characters per email are sent to Copilot.",
       modelFamily: "Analysis Model",
       noModel: "No available model",
+      modelsNotLoaded: "Load models first",
       batchSize: "Batch Size",
       autoAnalyze: "Allow Auto Analysis",
       maxClassification: "Max Auto Classification",
@@ -243,6 +251,7 @@ const LABELS: Record<Locale, DashboardLabels> = {
       analysisRetentionDays: "Summary Retention Days",
       importantSenders: "Important senders/groups (; separated)",
       save: "Save Settings",
+      autoSaveNote: "Changes are saved automatically to VS Code Settings",
       recentHoursOption: "Recent Hours",
       maxItemsOption: "Max Items",
       zhOption: "简体中文",
@@ -322,6 +331,7 @@ const LABELS: Record<Locale, DashboardLabels> = {
       sampleDigest: "Generating sample digest",
       analyze: "Analyzing with Copilot",
       reports: "Generating reports",
+      loadModels: "Loading Copilot models",
       detail: "Task is running. Please wait..."
     },
     model: {
@@ -350,6 +360,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("easyMail.openDigest", () => app.openDigest()),
     vscode.commands.registerCommand("easyMail.openSummary", () => app.openSummary()),
     vscode.commands.registerCommand("easyMail.generateReports", () => app.generateReports()),
+    vscode.commands.registerCommand("easyMail.loadModels", () => app.loadModels()),
     vscode.commands.registerCommand("easyMail.openDailyBrief", () => app.openDailyBrief()),
     vscode.commands.registerCommand("easyMail.openThreadReport", () => app.openThreadReport()),
     vscode.commands.registerCommand("easyMail.openSingleMailReport", () => app.openSingleMailReport()),
@@ -368,6 +379,8 @@ class EasyMailApp {
   private readonly llmProvider: LlmProvider;
   private busy: BusyState | null = null;
   private logFilePath = "";
+  private availableModelsCache: AvailableModel[] | null = null;
+  private availableModelsPending: Promise<AvailableModel[]> | null = null;
 
   public constructor(private readonly context: vscode.ExtensionContext) {
     this.llmProvider = new CopilotProvider();
@@ -407,6 +420,9 @@ class EasyMailApp {
   private async pullMailCore(forceSample: boolean, loadMore = false): Promise<void> {
     const config = await this.readConfig();
     await fs.promises.mkdir(this.getDataDir(), { recursive: true });
+    if (forceSample) {
+      await this.resetSampleState();
+    }
     const scriptPath = await this.findCollectorScript();
     const args = ["//nologo", scriptPath];
     const maxItems = Number(config.maxItems || 50);
@@ -455,7 +471,6 @@ class EasyMailApp {
       indexItems: nextIndex.items.length,
       threads: nextThreadStore.items.length
     });
-    await this.refresh();
     await vscode.window.showInformationMessage(`Email digest generated. Added ${merge.added}, skipped ${merge.skipped}.`);
   }
 
@@ -561,7 +576,6 @@ class EasyMailApp {
     await fs.promises.writeFile(this.getSummaryPath(), buildSummaryMarkdown(merged, summaryLabels), "utf8");
     await this.writeMailStore(removeStoredMailByIds(await this.readMailStore(), batch.map((item) => item.mailId)));
     await this.log("analyze:done", { batchSize: batch.length, mergedItems: merged.items.length });
-    await this.refresh();
     await vscode.window.showInformationMessage(`Easy Mail analysis completed for ${batch.length} mail(s).`);
   }
 
@@ -609,19 +623,18 @@ class EasyMailApp {
     const merged = mergeThreadAnalysisResults(current, parsed, allowedCategoryIds(await this.readPromptConfig()));
     await this.writeThreadAnalysisResult(merged);
     await this.log("threadAnalyze:done", { threadId, mergedItems: merged.items.length });
-    await this.refresh();
     await vscode.window.showInformationMessage(`Thread analysis completed for ${thread.subject || thread.threadId}.`);
   }
 
   private async sendPrompt(prompt: string, configuredModel: string, eventPrefix: string): Promise<{ raw: string }> {
-    const models = await this.llmProvider.listModels();
+    const models = await this.readCachedAvailableModels();
     const selectedModel = selectConfiguredModel(models, configuredModel);
     await this.log(`${eventPrefix}:models`, {
       availableCount: models.length,
       selected: selectedModel ? { id: selectedModel.id, family: selectedModel.family, name: selectedModel.name, vendor: selectedModel.vendor } : null
     });
     if (!selectedModel) {
-      throw new Error("Select an available GitHub Copilot model before analyzing.");
+      throw new Error("Load GitHub Copilot models first, then select a model before analyzing.");
     }
     const response = await this.llmProvider.sendPrompt(prompt, { modelFamily: configuredModel });
 
@@ -641,6 +654,9 @@ class EasyMailApp {
   }
 
   private async runWithBusy<T>(label: string, detail: string, task: () => Promise<T>): Promise<T> {
+    if (this.busy) {
+      throw new Error(`Another Easy Mail task is already running: ${this.busy.label}`);
+    }
     await this.log("busy:start", { label });
     this.busy = { label, detail, startedAt: new Date().toISOString() };
     await this.refresh();
@@ -683,6 +699,15 @@ class EasyMailApp {
     await vscode.window.showInformationMessage("Easy Mail reports generated.");
   }
 
+  public async loadModels(): Promise<void> {
+    const locale = await this.readLocale();
+    const labels = getLabels(locale);
+    await this.runWithBusy(labels.progress.loadModels, labels.progress.detail, async () => {
+      await this.loadAvailableModels();
+    });
+    await vscode.window.showInformationMessage("Easy Mail Copilot models loaded.");
+  }
+
   public async openDailyBrief(): Promise<void> {
     await this.ensureReportsExist();
     await openTextDocument(this.getDailyBriefPath());
@@ -718,6 +743,17 @@ class EasyMailApp {
     await deleteFileIfExists(this.getSingleMailReportPath());
     await this.refresh();
     await vscode.window.showInformationMessage("Local email cache cleared.");
+  }
+
+  private async resetSampleState(): Promise<void> {
+    await this.writeMailStore(emptyMailStore());
+    await this.writeMailIndex(emptyMailIndex());
+    await this.writeThreadStore(emptyThreadStore());
+    await this.writeClassificationCache(normalizeClassificationCache({}));
+    await this.writeIgnoredIds([]);
+    await fs.promises.writeFile(this.getAnalysisPath(), `${JSON.stringify({ generatedAt: "", overview: { totalMails: 0, mustHandleToday: 0, risks: 0, waitingForMe: 0, notices: 0 }, items: [] }, null, 2)}\n`, "utf8");
+    await this.writeThreadAnalysisResult({ generatedAt: "", overview: { totalThreads: 0, mustHandleToday: 0, risks: 0, waitingForMe: 0, notices: 0 }, items: [] });
+    await this.log("sample:reset", {});
   }
 
   private async generateReportsCore(): Promise<void> {
@@ -787,6 +823,10 @@ class EasyMailApp {
 
   private getModelInfoPath(): string {
     return path.join(this.getDataDir(), "model-info.json");
+  }
+
+  private getAvailableModelsPath(): string {
+    return path.join(this.getDataDir(), "available-models.json");
   }
 
   private getMailStorePath(): string {
@@ -916,13 +956,43 @@ class EasyMailApp {
     await fs.promises.writeFile(this.getModelInfoPath(), `${JSON.stringify(info, null, 2)}\n`, "utf8");
   }
 
-  private async readAvailableModels(): Promise<AvailableModel[]> {
-    try {
-      return await this.llmProvider.listModels();
-    } catch (error) {
-      await this.log("models:error", { error: formatError(error) });
+  private async readCachedAvailableModels(): Promise<AvailableModel[]> {
+    if (this.availableModelsCache) {
+      return this.availableModelsCache;
+    }
+    if (!fs.existsSync(this.getAvailableModelsPath())) {
       return [];
     }
+    try {
+      const raw = JSON.parse(await fs.promises.readFile(this.getAvailableModelsPath(), "utf8"));
+      const items = Array.isArray(raw.items)
+        ? raw.items.map(normalizeAvailableModel).filter((item: AvailableModel) => item.id || item.family || item.name)
+        : [];
+      this.availableModelsCache = items;
+      return items;
+    } catch (error) {
+      await this.log("models:cacheReadError", { error: formatError(error) });
+      return [];
+    }
+  }
+
+  private async loadAvailableModels(): Promise<void> {
+    const pending = this.availableModelsPending || this.llmProvider.listModels()
+      .then(async (items) => {
+        this.availableModelsCache = items;
+        await fs.promises.writeFile(this.getAvailableModelsPath(), `${JSON.stringify({ generatedAt: new Date().toISOString(), items }, null, 2)}\n`, "utf8");
+        await this.log("models:loaded", { count: items.length });
+        return items;
+      })
+      .catch(async (error) => {
+        await this.log("models:error", { error: formatError(error) });
+        throw error;
+      })
+      .finally(() => {
+        this.availableModelsPending = null;
+      });
+    this.availableModelsPending = pending;
+    await pending;
   }
 
   private async readAnalysisResult(): Promise<AnalysisResult> {
@@ -1111,7 +1181,13 @@ class EasyMailApp {
       return;
     }
 
-    const typed = message as { type?: string; draftReply?: string; mailId?: string; mailIds?: string[]; threadId?: string; config?: unknown };
+    const typed = message as { type?: string; draftReply?: string; mailId?: string; mailIds?: string[]; threadId?: string; config?: unknown; silent?: boolean };
+    await this.log("message:received", {
+      type: typed.type || "",
+      mailId: typed.mailId || "",
+      mailIds: Array.isArray(typed.mailIds) ? typed.mailIds.length : 0,
+      threadId: typed.threadId || ""
+    });
     if (typed.type === "copyDraft") {
       await vscode.env.clipboard.writeText(String(typed.draftReply || ""));
       await vscode.window.showInformationMessage("Draft reply copied.");
@@ -1124,6 +1200,7 @@ class EasyMailApp {
         ignoredIds.push(typed.mailId);
         await this.writeIgnoredIds(ignoredIds);
       }
+      await this.log("ignore:done", { mailId: typed.mailId || "", ignoredCount: ignoredIds.length });
       await this.refresh();
       return;
     }
@@ -1145,6 +1222,11 @@ class EasyMailApp {
 
     if (typed.type === "generateReports") {
       await this.generateReports();
+      return;
+    }
+
+    if (typed.type === "loadModels") {
+      await this.loadModels();
       return;
     }
 
@@ -1219,7 +1301,7 @@ class EasyMailApp {
     }
   }
 
-  private async saveConfigFromMessage(message: { config?: unknown }): Promise<void> {
+  private async saveConfigFromMessage(message: { config?: unknown; silent?: boolean }): Promise<void> {
     if (!message.config || typeof message.config !== "object") {
       return;
     }
@@ -1243,7 +1325,9 @@ class EasyMailApp {
       importantSenders: Object.prototype.hasOwnProperty.call(patch, "importantSenders") ? parseFolders(patch.importantSenders, current.importantSenders || []) : current.importantSenders
     };
     await this.updateSettings(next);
-    await vscode.window.showInformationMessage("Easy Mail settings saved to VS Code Settings.");
+    if (!message.silent) {
+      await vscode.window.showInformationMessage("Easy Mail settings saved to VS Code Settings.");
+    }
   }
 
   private async getDashboardHtml(): Promise<string> {
@@ -1271,6 +1355,7 @@ class EasyMailApp {
     const threadByMailId = buildThreadLookup(threadStore);
     const categoryHtml = new Map(state.categories.map((entry) => [entry.id, renderCategory(entry.id, entry.items, labels, categoryLabels, threadByMailId)]));
     const mustHandleHtml = categoryHtml.get("mustHandleToday") || "";
+    const analysedTargetId = domIdForCategory(state.categories.find((entry) => entry.id !== "ignored" && entry.items.length > 0)?.id || "mustHandleToday");
     const rows = state.categories
       .filter((entry) => entry.id !== "mustHandleToday")
       .map((entry) => categoryHtml.get(entry.id) || "")
@@ -1280,14 +1365,15 @@ class EasyMailApp {
     const queue = extendedState.queue || { pending: [], blocked: [], analysed: [], allowed: [] };
     const classifications = extendedState.classifications || normalizeClassificationCache({});
     const securityDecisions = extendedState.securityDecisions || new Map<string, SecurityGateDecisionResult>();
-    const availableModels = await this.readAvailableModels();
+    const availableModels = await this.readCachedAvailableModels();
     const configuredModel = String(config.modelFamily || "");
     const canAnalyze = !!selectConfiguredModel(availableModels, configuredModel);
-    const analysisDisabled = canAnalyze ? "" : " disabled";
+    const busyDisabled = this.busy ? " disabled" : "";
+    const analysisDisabled = canAnalyze && !this.busy ? "" : " disabled";
     const modelOptions = renderModelOptions(availableModels, configuredModel, labels);
-    const pendingHtml = renderPendingPanel(labels.pending.title, queue.pending, classifications, labels, queue.allowed, false, threadByMailId, securityDecisions);
-    const blockedHtml = renderPendingPanel(labels.pending.blockedTitle, queue.blocked, classifications, labels, [], true, threadByMailId, securityDecisions);
-    const threadsHtml = renderThreadsPanel(threadStore, labels, threadAnalysis);
+    const pendingHtml = renderPendingPanel("pending-panel", labels.pending.title, queue.pending, classifications, labels, queue.allowed, false, threadByMailId, securityDecisions);
+    const blockedHtml = renderPendingPanel("blocked-panel", labels.pending.blockedTitle, queue.blocked, classifications, labels, [], true, threadByMailId, securityDecisions);
+    const threadsHtml = renderThreadsPanel(threadStore, labels, threadAnalysis, Boolean(this.busy));
     const configuredFolders = Array.isArray(config.folders) ? config.folders.map(String) : ["Inbox"];
     const hasHistoryAnchors = Object.keys(folderOldestReceivedTimes(index, configuredFolders)).length > 0;
     const loadMoreDisabled = hasHistoryAnchors ? "" : " disabled";
@@ -1318,6 +1404,7 @@ class EasyMailApp {
     .settings summary { cursor: pointer; font-weight: 700; }
     .settings .settings-body { margin-top: 10px; }
     .help { color: #6d6d6d; font-size: 11px; line-height: 1.35; }
+    .autosave-note { color: #41515a; font-size: 12px; margin-top: 10px; padding: 8px 10px; border-radius: 8px; background: #faf7f2; }
     .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
     label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #41515a; }
     input, select { border: 1px solid #d8c3a5; border-radius: 6px; padding: 6px 8px; background: #fffdf8; color: #1b2a34; }
@@ -1327,7 +1414,8 @@ class EasyMailApp {
     .meta-label { display: block; color: #5c6870; font-size: 11px; font-weight: 700; text-transform: uppercase; }
     .meta-value { display: block; color: #132a35; font-size: 15px; font-weight: 700; overflow-wrap: anywhere; margin-top: 2px; }
     .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
-    .stat { background: #fff; padding: 10px; border-radius: 10px; }
+    .stat { background: #fff; color: #132a35; padding: 10px; border-radius: 10px; text-align: left; min-height: 72px; display: flex; flex-direction: column; justify-content: center; }
+    .stat:hover { outline: 2px solid #d8c3a5; }
     .stat .value { font-size: 22px; font-weight: 700; }
     details.category { margin-bottom: 12px; background: #fff; border-radius: 10px; padding: 8px 10px; }
     details.category summary { cursor: pointer; font-weight: 700; font-size: 16px; }
@@ -1349,18 +1437,18 @@ class EasyMailApp {
   <button class="language-toggle" id="outputLanguage" type="button" value="${escapeAttr(locale)}" onclick="toggleLanguage()">${escapeHtml(locale === "en-US" ? labels.settings.enOption : labels.settings.zhOption)}</button>
   <div class="toolbar">
     <div class="toolbar-group">
-      <button onclick="post('pullMail')">${escapeHtml(labels.toolbar.pullMail)}</button>
-      <button onclick="post('loadMore')"${loadMoreDisabled}>${escapeHtml(labels.toolbar.loadMore)}</button>
-      <button onclick="post('sampleDigest')">${escapeHtml(labels.toolbar.sample)}</button>
+      <button onclick="post('pullMail')"${busyDisabled}>${escapeHtml(labels.toolbar.pullMail)}</button>
+      <button onclick="post('loadMore')"${loadMoreDisabled || busyDisabled}>${escapeHtml(labels.toolbar.loadMore)}</button>
+      <button onclick="post('sampleDigest')"${busyDisabled}>${escapeHtml(labels.toolbar.sample)}</button>
       <button onclick="post('analyze')"${analysisDisabled}>${escapeHtml(labels.toolbar.analyze)}</button>
       <button onclick="analyzeSelected()"${analysisDisabled}>${escapeHtml(labels.toolbar.analyzeSelected)}</button>
       <button onclick="post('analyzeAllAllowed')"${analysisDisabled}>${escapeHtml(labels.toolbar.analyzeAllAllowed)}</button>
-      <button onclick="post('refresh')">${escapeHtml(labels.toolbar.refresh)}</button>
+      <button onclick="post('refresh')"${busyDisabled}>${escapeHtml(labels.toolbar.refresh)}</button>
     </div>
     <div class="toolbar-group">
       <button class="secondary" onclick="post('openDigest')">${escapeHtml(labels.toolbar.openDigest)}</button>
       <button class="secondary" onclick="post('openSummary')">${escapeHtml(labels.toolbar.openSummary)}</button>
-      <button class="secondary" onclick="post('generateReports')">${escapeHtml(labels.toolbar.generateReports)}</button>
+      <button class="secondary" onclick="post('generateReports')"${busyDisabled}>${escapeHtml(labels.toolbar.generateReports)}</button>
       <button class="secondary" onclick="post('openDailyBrief')">${escapeHtml(labels.toolbar.openDailyBrief)}</button>
       <button class="secondary" onclick="post('openThreadReport')">${escapeHtml(labels.toolbar.openThreadReport)}</button>
       <button class="secondary" onclick="post('openSingleMailReport')">${escapeHtml(labels.toolbar.openSingleMailReport)}</button>
@@ -1368,7 +1456,7 @@ class EasyMailApp {
     <div class="toolbar-group">
       <button class="ghost" onclick="post('openSettings')">${escapeHtml(labels.toolbar.settingsFile)}</button>
       <button class="ghost" onclick="post('openPromptConfig')">${escapeHtml(labels.toolbar.promptConfig)}</button>
-      <button class="ghost" onclick="post('clearLocalCache')">${escapeHtml(labels.toolbar.clearStore)}</button>
+      <button class="ghost" onclick="post('clearLocalCache')"${busyDisabled}>${escapeHtml(labels.toolbar.clearStore)}</button>
     </div>
   </div>
   ${busyHtml}
@@ -1391,6 +1479,9 @@ class EasyMailApp {
           ${modelOptions}
         </select>
       </label>
+      <label>${escapeHtml(labels.toolbar.loadModels)}
+        <button type="button" onclick="post('loadModels')"${busyDisabled}>${escapeHtml(labels.toolbar.loadModels)}</button>
+      </label>
       <label>${escapeHtml(labels.settings.maxClassification)}
         <select id="autoAnalyzeMaxClassificationLevel">
           ${renderClassificationOptions(Number(config.autoAnalyzeMaxClassificationLevel ?? 2), labels)}
@@ -1403,9 +1494,7 @@ class EasyMailApp {
         </select>
       </label>
       </div>
-      <div class="toolbar" style="margin: 10px 0 0">
-        <button class="secondary" onclick="saveConfig()">${escapeHtml(labels.settings.save)}</button>
-      </div>
+      <div class="autosave-note">${escapeHtml(labels.settings.autoSaveNote)}</div>
     </div>
   </details>
   <div class="meta">
@@ -1418,15 +1507,15 @@ class EasyMailApp {
     </div>
   </div>
   <div class="stats">
-    ${renderStat(labels.stats.pulled, index.items.length)}
-    ${renderStat(labels.stats.pending, queue.pending.length)}
-    ${renderStat(labels.stats.analysed, queue.analysed.length)}
-    ${renderStat(labels.stats.blocked, queue.blocked.length)}
-    ${renderStat(labels.stats.mustHandle, state.overview.mustHandleToday)}
-    ${renderStat(labels.stats.risk, state.overview.risks)}
-    ${renderStat(labels.stats.waiting, state.overview.waitingForMe)}
-    ${renderStat(labels.stats.notice, state.overview.notices)}
-    ${renderStat(labels.stats.threads, threadStore.items.length)}
+    ${renderStat(labels.stats.pulled, index.items.length, "pending-panel")}
+    ${renderStat(labels.stats.pending, queue.pending.length, "pending-panel")}
+    ${renderStat(labels.stats.analysed, state.overview.totalMails, analysedTargetId)}
+    ${renderStat(labels.stats.blocked, queue.blocked.length, "blocked-panel")}
+    ${renderStat(labels.stats.mustHandle, state.overview.mustHandleToday, domIdForCategory("mustHandleToday"))}
+    ${renderStat(labels.stats.risk, state.overview.risks, domIdForCategory("risk"))}
+    ${renderStat(labels.stats.waiting, state.overview.waitingForMe, domIdForCategory("waitingForMe"))}
+    ${renderStat(labels.stats.notice, state.overview.notices, domIdForCategory("notice"))}
+    ${renderStat(labels.stats.threads, threadStore.items.length, "threads-panel")}
   </div>
   ${pendingHtml}
   ${mustHandleHtml}
@@ -1443,15 +1532,25 @@ class EasyMailApp {
     settingsPanel.addEventListener('toggle', () => {
       vscode.setState(Object.assign({}, vscode.getState() || {}, { settingsOpen: settingsPanel.open }));
     });
-    document.getElementById('rangeMode').addEventListener('change', () => {
-      post('saveConfig', { config: { rangeMode: document.getElementById('rangeMode').value } });
-    });
-    document.getElementById('modelFamily').addEventListener('change', () => saveConfig());
+    const configControlIds = ['rangeMode', 'rangeValue', 'folders', 'modelFamily', 'autoAnalyzeEnabled', 'autoAnalyzeMaxClassificationLevel'];
+    const autoSaveConfig = debounce(() => saveConfig(true, false), 450);
+    for (const id of configControlIds) {
+      const control = document.getElementById(id);
+      if (!control) {
+        continue;
+      }
+      control.addEventListener('change', autoSaveConfig);
+      if (control.tagName === 'INPUT') {
+        control.addEventListener('input', autoSaveConfig);
+      }
+    }
     function post(type, extra) { vscode.postMessage(Object.assign({ type }, extra || {})); }
-    function saveConfig() {
+    function saveConfig(keepSettingsOpen, silent) {
       const rangeMode = document.getElementById('rangeMode').value;
       const rangeValue = document.getElementById('rangeValue');
+      vscode.setState(Object.assign({}, vscode.getState() || {}, { settingsOpen: keepSettingsOpen !== false }));
       post('saveConfig', {
+        silent: silent === true,
         config: {
           rangeMode,
           outputLanguage: document.getElementById('outputLanguage').value,
@@ -1470,7 +1569,24 @@ class EasyMailApp {
       const next = button.value === 'en-US' ? 'zh-CN' : 'en-US';
       button.value = next;
       button.textContent = next === 'en-US' ? 'English' : '简体中文';
-      post('saveConfig', { config: { outputLanguage: next } });
+      post('saveConfig', { silent: false, config: { outputLanguage: next } });
+    }
+    function debounce(fn, wait) {
+      let timer;
+      return () => {
+        clearTimeout(timer);
+        timer = setTimeout(fn, wait);
+      };
+    }
+    function jumpToPanel(targetId) {
+      const target = document.getElementById(targetId);
+      if (!target) {
+        return;
+      }
+      if (target.tagName === 'DETAILS') {
+        target.open = true;
+      }
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
     function analyzeSelected() {
       const checked = Array.from(document.querySelectorAll('input[data-mail-id]:checked')).map((input) => input.getAttribute('data-mail-id'));
@@ -1510,8 +1626,8 @@ class DashboardProvider implements vscode.WebviewViewProvider {
   }
 }
 
-function renderStat(label: string, value: number | undefined): string {
-  return `<div class="stat"><div>${escapeHtml(label)}</div><div class="value">${escapeHtml(String(value || 0))}</div></div>`;
+function renderStat(label: string, value: number | undefined, targetId: string): string {
+  return `<button class="stat" onclick="jumpToPanel(${toJsLiteral(targetId)})"><span>${escapeHtml(label)}</span><span class="value">${escapeHtml(String(value || 0))}</span></button>`;
 }
 
 function renderCategory(
@@ -1523,10 +1639,11 @@ function renderCategory(
 ): string {
   const cards = items.length ? items.map((item) => renderCard(item, labels, threadByMailId)).join("") : `<div class="empty">${escapeHtml(labels.card.noItems)}</div>`;
   const open = category === "mustHandleToday" ? " open" : "";
-  return `<details class="category"${open}><summary>${escapeHtml(categoryLabels[category] || labels.categories[category] || category)} (${items.length})</summary><div class="category-body">${cards}</div></details>`;
+  return `<details class="category"${open} id="${escapeAttr(domIdForCategory(category))}"><summary>${escapeHtml(categoryLabels[category] || labels.categories[category] || category)} (${items.length})</summary><div class="category-body">${cards}</div></details>`;
 }
 
 function renderPendingPanel(
+  panelId: string,
   title: string,
   items: StoredMail[],
   classifications: ClassificationCache,
@@ -1561,21 +1678,22 @@ function renderPendingPanel(
       ${threadHtml}
     </article>`;
   }).join("") : `<div class="empty">${escapeHtml(labels.card.noItems)}</div>`;
-  return `<details class="category"${blocked ? "" : " open"}><summary>${escapeHtml(title)} (${items.length})</summary><div class="category-body">${cards}</div></details>`;
+  return `<details class="category"${blocked ? "" : " open"} id="${escapeAttr(panelId)}"><summary>${escapeHtml(title)} (${items.length})</summary><div class="category-body">${cards}</div></details>`;
 }
 
-function renderThreadsPanel(threadStore: ThreadStore, labels: DashboardLabels, threadAnalysis: ThreadAnalysisResult): string {
+function renderThreadsPanel(threadStore: ThreadStore, labels: DashboardLabels, threadAnalysis: ThreadAnalysisResult, busy: boolean): string {
   const threads = [...(threadStore.items || [])].sort((a, b) => String(b.lastTime || "").localeCompare(String(a.lastTime || "")));
   const analysisByThreadId = new Map((threadAnalysis.items || []).map((item) => [item.threadId, item]));
   const cards = threads.length
-    ? threads.map((thread) => renderThreadCard(thread, labels, analysisByThreadId.get(thread.threadId))).join("")
+    ? threads.map((thread) => renderThreadCard(thread, labels, analysisByThreadId.get(thread.threadId), busy)).join("")
     : `<div class="empty">${escapeHtml(labels.card.noItems)}</div>`;
-  return `<details class="category" open><summary>${escapeHtml(labels.threads.title)} (${threads.length})</summary><div class="category-body">${cards}</div></details>`;
+  return `<details class="category" open id="threads-panel"><summary>${escapeHtml(labels.threads.title)} (${threads.length})</summary><div class="category-body">${cards}</div></details>`;
 }
 
-function renderThreadCard(thread: ThreadStore["items"][number], labels: DashboardLabels, analysis?: ThreadAnalysisResult["items"][number]): string {
-  const timeline = thread.timeline.length
-    ? thread.timeline.map((message) => {
+function renderThreadCard(thread: ThreadStore["items"][number], labels: DashboardLabels, analysis: ThreadAnalysisResult["items"][number] | undefined, busy: boolean): string {
+  const timelineItems = [...(thread.timeline || [])].sort(compareTimelineMessagesForDisplay);
+  const timeline = timelineItems.length
+    ? timelineItems.map((message) => {
       const attachments = message.attachmentNames.length
         ? `${message.attachmentCount}: ${message.attachmentNames.join(", ")}`
         : String(message.attachmentCount || 0);
@@ -1598,10 +1716,10 @@ function renderThreadCard(thread: ThreadStore["items"][number], labels: Dashboar
     <div><strong>${escapeHtml(labels.threads.folders)}:</strong> ${escapeHtml(thread.folders.join(", ") || "-")}</div>
     <div><strong>${escapeHtml(labels.threads.contentStatus)}:</strong> ${escapeHtml(thread.contentStatus || "-")}</div>
     <div><strong>${escapeHtml(labels.threads.security)}:</strong> ${escapeHtml(formatThreadSecurity(thread.security))}</div>
-    <div class="actions"><button class="secondary" onclick="post('analyzeThread', { threadId: ${toJsLiteral(thread.threadId)} })">${escapeHtml(labels.threads.analyzeThread)}</button></div>
+    <div class="actions"><button class="secondary" onclick="post('analyzeThread', { threadId: ${toJsLiteral(thread.threadId)} })"${busy ? " disabled" : ""}>${escapeHtml(labels.threads.analyzeThread)}</button></div>
     ${renderThreadAnalysisSummary(analysis, labels)}
     <details>
-      <summary>${escapeHtml(labels.threads.timeline)} (${thread.timeline.length})</summary>
+      <summary>${escapeHtml(labels.threads.timeline)} (${timelineItems.length})</summary>
       <div class="timeline">${timeline}</div>
     </details>
   </article>`;
@@ -1648,7 +1766,7 @@ function renderModelOptions(
   labels: DashboardLabels
 ): string {
   if (!models.length) {
-    return `<option value="">${escapeHtml(labels.settings.noModel)}</option>`;
+    return `<option value="">${escapeHtml(labels.settings.modelsNotLoaded)}</option>`;
   }
   const uniqueModels = [...new Map(models.map((model) => [modelKey(model), model])).values()];
   const options = uniqueModels.map((model) => {
@@ -1811,6 +1929,10 @@ function domIdForThreadMessage(threadId: string, mailId: string): string {
   return `thread-message-${safeDomId(threadId)}-${safeDomId(mailId)}`;
 }
 
+function domIdForCategory(category: string): string {
+  return `category-${safeDomId(category)}`;
+}
+
 function safeDomId(value: string): string {
   return String(value || "").replace(/[^A-Za-z0-9_-]/g, "-");
 }
@@ -1869,6 +1991,14 @@ function formatThreadSecurity(security: ThreadStore["items"][number]["security"]
     `block ${security.blockedMessages}`,
     security.partialContext ? "partial" : ""
   ].filter(Boolean).join(" / ");
+}
+
+function compareTimelineMessagesForDisplay(a: ThreadStore["items"][number]["timeline"][number], b: ThreadStore["items"][number]["timeline"][number]): number {
+  if (a.conversationIndex && b.conversationIndex && a.conversationIndex !== b.conversationIndex) {
+    return a.conversationIndex.localeCompare(b.conversationIndex);
+  }
+  const byTime = String(a.receivedTime || a.sentTime || "").localeCompare(String(b.receivedTime || b.sentTime || ""));
+  return byTime || a.mailId.localeCompare(b.mailId);
 }
 
 function mergeAnalysisResults(current: AnalysisResult, next: AnalysisResult, allowedCategories?: string[]): AnalysisResult {

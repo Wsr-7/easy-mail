@@ -45,8 +45,13 @@ test("buildDashboardState filters ignored ids and groups categories", () => {
 
   const mustDo = state.categories.find((entry) => entry.id === "mustHandleToday");
   const notice = state.categories.find((entry) => entry.id === "notice");
+  const ignored = state.categories.find((entry) => entry.id === "ignored");
   assert.equal(mustDo?.items.length, 1);
   assert.equal(notice?.items.length, 0);
+  assert.equal(ignored?.items.length, 1);
+  assert.equal(state.overview.totalMails, 1);
+  assert.equal(state.overview.mustHandleToday, 1);
+  assert.equal(state.overview.notices, 0);
 });
 
 test("buildDashboardState can carry thread store without changing mail categories", () => {

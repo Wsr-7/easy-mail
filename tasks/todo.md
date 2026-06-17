@@ -186,3 +186,36 @@
 - Dashboard 模型列表与分析发送路径共用同一套模型选择 helper。
 - Single Mail AI 和 Thread AI 继续使用 Copilot，但经由 `LlmProvider` 调用。
 - `npm test` 通过。
+
+## Dashboard Bugfix: Progress, Counts, Navigation, Settings
+
+- [x] 定位 busy 进度条不收尾、语言切换卡顿、统计不准、忽略不可见、settings 同步不一致的交互层根因
+- [x] 修复 analysed / ignored dashboard 状态计算
+- [x] 修复 thread timeline normalize/display ASC
+- [x] 统一 dashboard settings 自动同步到 VS Code Settings
+- [x] 移除 dashboard settings 的手动保存按钮，自动保存时显示 VS Code toast
+- [x] 让统计小卡片可跳转并展开对应 panel
+- [x] 运行测试并重新打包
+
+### Working Notes
+
+- `mail-store` 在分析后会移除原文队列，因此已分析数量必须从 `analysis-result.json` 计算。
+- Dashboard 渲染不能被 `vscode.lm.selectChatModels()` 长时间阻塞，模型列表需要缓存和短超时。
+## Dashboard Regression Rework
+
+### Scope
+
+- [x] P1: Sample data progress must end and sample can be reloaded for demos.
+- [x] P2: Analyze progress must end after model response, and analysed count must reflect `analysis-result.json`.
+- [x] P3: Ignore must log the action, move analyzed mails into Ignored, and refresh without hanging.
+- [x] P4: Language switching must not trigger automatic Copilot model discovery.
+- [x] P5: Analyze Thread button must either run or show an actionable error; timeline must render ASC.
+- [x] P6: Stat tiles must jump to and expand the target panel.
+- [x] P7: Settings panel uses one behavior only: dashboard controls auto-save to VS Code Settings.
+- [x] P8: Model list is loaded only by explicit user action, persists until manually reloaded, and is not auto-refreshed on extension open.
+- [x] P9: Replace extension/activity icon with transparent-background icon from docs/v2-design/icon.png.
+
+### Evidence
+
+- Runtime log shows `pullMail:done` and `analyze:done` without `busy:end`; root is an awaited dashboard refresh inside task core.
+- Runtime log shows repeated sample data got `added:0, skipped:4, storeItems:0`; sample mode was incorrectly subject to historical index de-dup for demo reload.

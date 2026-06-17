@@ -92,6 +92,7 @@ function normalizeThreadRecord(input: unknown): ThreadRecord | null {
   const timeline = Array.isArray(input.timeline)
     ? input.timeline.map(normalizeThreadMessage).filter(Boolean) as ThreadMessage[]
     : [];
+  timeline.sort(compareThreadMessages);
   const messageCount = positiveNumber(input.messageCount, timeline.length);
   return {
     threadId,

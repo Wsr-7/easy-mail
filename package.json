@@ -5,6 +5,7 @@
   "version": "0.1.0",
   "publisher": "Wsr-7",
   "private": true,
+  "icon": "media/icon.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/Wsr-7/easy-mail.git"
@@ -23,6 +24,7 @@
     "onCommand:easyMail.analyze",
     "onCommand:easyMail.analyzeThread",
     "onCommand:easyMail.analyzeAllAllowed",
+    "onCommand:easyMail.loadModels",
     "onCommand:easyMail.generateReports",
     "onCommand:easyMail.openDailyBrief",
     "onCommand:easyMail.openThreadReport",
@@ -210,7 +212,7 @@
         {
           "id": "easyMail",
           "title": "Easy Mail",
-          "icon": "media/icon.svg"
+          "icon": "media/icon.png"
         }
       ]
     },
@@ -292,6 +294,10 @@
       {
         "command": "easyMail.analyzeAllAllowed",
         "title": "Easy Mail: Analyze All Allowed with Copilot"
+      },
+      {
+        "command": "easyMail.loadModels",
+        "title": "Easy Mail: Load Copilot Models"
       },
       {
         "command": "easyMail.refreshDashboard",

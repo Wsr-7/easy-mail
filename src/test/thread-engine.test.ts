@@ -156,6 +156,25 @@ test("buildThreadStore and normalizeThreadStore keep thread store shape stable",
   assert.equal(normalized.items[0].messageCount, 1);
 });
 
+test("normalizeThreadStore keeps timeline in ascending conversation order", () => {
+  const normalized = normalizeThreadStore({
+    generatedAt: "",
+    lastBuiltAt: "",
+    items: [
+      {
+        threadId: "conversation:conv-1",
+        subject: "Thread",
+        timeline: [
+          { mailId: "mail-new", conversationIndex: "0002", receivedTime: "2026-06-16 10:00:00" },
+          { mailId: "mail-old", conversationIndex: "0001", receivedTime: "2026-06-16 09:00:00" }
+        ]
+      }
+    ]
+  });
+
+  assert.deepEqual(normalized.items[0].timeline.map((item) => item.mailId), ["mail-old", "mail-new"]);
+});
+
 test("pruneThreadStore removes threads older than retention days", () => {
   const store = normalizeThreadStore({
     generatedAt: "",

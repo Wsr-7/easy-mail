@@ -1,0 +1,2 @@
+- Dashboard analysis counts must come from `analysis-result.json`, not `mail-store`, because analyzed mails are removed from the raw queue after successful analysis.
+- Dashboard rendering should not block indefinitely on model discovery; use cached/timeout-bounded model listing for UI refreshes and reserve longer waits for actual analysis commands.
