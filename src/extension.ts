@@ -332,30 +332,30 @@ const LABELS: Record<Locale, DashboardLabels> = {
 };
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-  const app = new EmailAnalysisApp(context);
+  const app = new EasyMailApp(context);
   context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider("emailAnalysis.dashboard", app.dashboardProvider),
-    vscode.commands.registerCommand("emailAnalysis.pullMail", () => app.pullMail(false)),
-    vscode.commands.registerCommand("emailAnalysis.loadMore", () => app.loadMore()),
-    vscode.commands.registerCommand("emailAnalysis.generateSampleDigest", () => app.pullMail(true)),
-    vscode.commands.registerCommand("emailAnalysis.analyze", () => app.analyze()),
-    vscode.commands.registerCommand("emailAnalysis.analyzeThread", async () => {
+    vscode.window.registerWebviewViewProvider("easyMail.dashboard", app.dashboardProvider),
+    vscode.commands.registerCommand("easyMail.pullMail", () => app.pullMail(false)),
+    vscode.commands.registerCommand("easyMail.loadMore", () => app.loadMore()),
+    vscode.commands.registerCommand("easyMail.generateSampleDigest", () => app.pullMail(true)),
+    vscode.commands.registerCommand("easyMail.analyze", () => app.analyze()),
+    vscode.commands.registerCommand("easyMail.analyzeThread", async () => {
       const threadId = await vscode.window.showInputBox({ prompt: "Thread ID to analyze" });
       if (threadId) {
         await app.analyzeThread(threadId);
       }
     }),
-    vscode.commands.registerCommand("emailAnalysis.analyzeAllAllowed", () => app.analyzeAllAllowed()),
-    vscode.commands.registerCommand("emailAnalysis.refreshDashboard", () => app.refresh()),
-    vscode.commands.registerCommand("emailAnalysis.openDigest", () => app.openDigest()),
-    vscode.commands.registerCommand("emailAnalysis.openSummary", () => app.openSummary()),
-    vscode.commands.registerCommand("emailAnalysis.generateReports", () => app.generateReports()),
-    vscode.commands.registerCommand("emailAnalysis.openDailyBrief", () => app.openDailyBrief()),
-    vscode.commands.registerCommand("emailAnalysis.openThreadReport", () => app.openThreadReport()),
-    vscode.commands.registerCommand("emailAnalysis.openSingleMailReport", () => app.openSingleMailReport()),
-    vscode.commands.registerCommand("emailAnalysis.openSettings", () => app.openSettings()),
-    vscode.commands.registerCommand("emailAnalysis.openPromptConfig", () => app.openPromptConfig()),
-    vscode.commands.registerCommand("emailAnalysis.clearLocalCache", () => app.clearLocalCache())
+    vscode.commands.registerCommand("easyMail.analyzeAllAllowed", () => app.analyzeAllAllowed()),
+    vscode.commands.registerCommand("easyMail.refreshDashboard", () => app.refresh()),
+    vscode.commands.registerCommand("easyMail.openDigest", () => app.openDigest()),
+    vscode.commands.registerCommand("easyMail.openSummary", () => app.openSummary()),
+    vscode.commands.registerCommand("easyMail.generateReports", () => app.generateReports()),
+    vscode.commands.registerCommand("easyMail.openDailyBrief", () => app.openDailyBrief()),
+    vscode.commands.registerCommand("easyMail.openThreadReport", () => app.openThreadReport()),
+    vscode.commands.registerCommand("easyMail.openSingleMailReport", () => app.openSingleMailReport()),
+    vscode.commands.registerCommand("easyMail.openSettings", () => app.openSettings()),
+    vscode.commands.registerCommand("easyMail.openPromptConfig", () => app.openPromptConfig()),
+    vscode.commands.registerCommand("easyMail.clearLocalCache", () => app.clearLocalCache())
   );
 
   await app.initialize();
@@ -363,7 +363,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
 export function deactivate(): void {}
 
-class EmailAnalysisApp {
+class EasyMailApp {
   public readonly dashboardProvider: DashboardProvider;
   private readonly llmProvider: LlmProvider;
   private busy: BusyState | null = null;
@@ -380,7 +380,7 @@ class EmailAnalysisApp {
     await this.ensureConfig();
     await this.log("initialize", { extensionPath: this.context.extensionPath, dataDir: this.getDataDir() });
     this.context.subscriptions.push(vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration("emailAnalysis")) {
+      if (event.affectsConfiguration("easyMail")) {
         void this.log("settings:changed", {});
         void this.refresh();
       }
@@ -562,7 +562,7 @@ class EmailAnalysisApp {
     await this.writeMailStore(removeStoredMailByIds(await this.readMailStore(), batch.map((item) => item.mailId)));
     await this.log("analyze:done", { batchSize: batch.length, mergedItems: merged.items.length });
     await this.refresh();
-    await vscode.window.showInformationMessage(`Email analysis completed for ${batch.length} mail(s).`);
+    await vscode.window.showInformationMessage(`Easy Mail analysis completed for ${batch.length} mail(s).`);
   }
 
   public async analyzeThread(threadId: string): Promise<void> {
@@ -680,7 +680,7 @@ class EmailAnalysisApp {
     await this.runWithBusy(labels.progress.reports, labels.progress.detail, async () => {
       await this.generateReportsCore();
     });
-    await vscode.window.showInformationMessage("Email analysis reports generated.");
+    await vscode.window.showInformationMessage("Easy Mail reports generated.");
   }
 
   public async openDailyBrief(): Promise<void> {
@@ -699,7 +699,7 @@ class EmailAnalysisApp {
   }
 
   public async openSettings(): Promise<void> {
-    await vscode.commands.executeCommand("workbench.action.openSettings", "@ext:Wsr-7.email-analysis-poc");
+    await vscode.commands.executeCommand("workbench.action.openSettings", "@ext:Wsr-7.easy-mail");
   }
 
   public async openPromptConfig(): Promise<void> {
@@ -750,7 +750,7 @@ class EmailAnalysisApp {
   }
 
   private getConfigPath(): string {
-    return path.join(this.context.globalStorageUri.fsPath, "email-analysis.config.json");
+    return path.join(this.context.globalStorageUri.fsPath, "easy-mail.config.json");
   }
 
   private getDigestPath(): string {
@@ -824,7 +824,7 @@ class EmailAnalysisApp {
   private async readConfig(): Promise<Record<string, any>> {
     await this.ensureConfig();
     const defaults = JSON.parse(await fs.promises.readFile(path.join(this.context.extensionPath, "default-config.json"), "utf8"));
-    const settings = vscode.workspace.getConfiguration("emailAnalysis");
+    const settings = vscode.workspace.getConfiguration("easyMail");
     return {
       ...defaults,
       rangeMode: settings.get("rangeMode", defaults.rangeMode),
@@ -858,7 +858,7 @@ class EmailAnalysisApp {
   }
 
   private async updateSettings(values: Record<string, unknown>): Promise<void> {
-    const settings = vscode.workspace.getConfiguration("emailAnalysis");
+    const settings = vscode.workspace.getConfiguration("easyMail");
     for (const [key, value] of Object.entries(values)) {
       await settings.update(key, value, vscode.ConfigurationTarget.Global);
     }
@@ -867,7 +867,7 @@ class EmailAnalysisApp {
   private async initializeLogger(): Promise<void> {
     const logDir = path.join(this.context.globalStorageUri.fsPath, "logs");
     await fs.promises.mkdir(logDir, { recursive: true });
-    this.logFilePath = path.join(logDir, "email-analysis.log");
+    this.logFilePath = path.join(logDir, "easy-mail.log");
     await this.log("logger:ready", { logFilePath: this.logFilePath });
   }
 
@@ -1243,7 +1243,7 @@ class EmailAnalysisApp {
       importantSenders: Object.prototype.hasOwnProperty.call(patch, "importantSenders") ? parseFolders(patch.importantSenders, current.importantSenders || []) : current.importantSenders
     };
     await this.updateSettings(next);
-    await vscode.window.showInformationMessage("Email Analysis settings saved to VS Code Settings.");
+    await vscode.window.showInformationMessage("Easy Mail settings saved to VS Code Settings.");
   }
 
   private async getDashboardHtml(): Promise<string> {

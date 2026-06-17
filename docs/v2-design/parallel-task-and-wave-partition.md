@@ -1,8 +1,8 @@
 请使用 parallel-goals-for-a-task skill（刚刚创建到.codex/skills全局skills目录下，不确定是否已经加载完成并可用），把剩余工作拆成适合并行 subagent 执行的 goals，并在我确认后执行。  
-保持之前的策略:email-analysis-repo-specific-implementation-plan.md为主要执行依据。如email-analysis-new-architecture-design.md只作为背景参考；如果两份文档有冲突，或者以下内容与implementation plan 有冲突，都以 repo-specific implementation plan 为准。。  
+保持之前的策略:easy-mail-repo-specific-implementation-plan.md为主要执行依据。如easy-mail-new-architecture-design.md只作为背景参考；如果两份文档有冲突，或者以下内容与implementation plan 有冲突，都以 repo-specific implementation plan 为准。。  
   
 核心目标：  
-Build the remaining next-stage email-analysis architecture in the current VS Code extension / TypeScript / VBScript repo. Preserve the completed v0.2 Single Mail Analysis work, then add Thread Timeline, Thread Store, Thread Engine, Security Gate and Redaction, Thread-level Analysis, unified reports, and later LLM Provider abstraction. The project must remain read-only: no PST/OST parsing, no automatic sending, no deleting, no moving, no archiving, no marking read/unread, and no writeback to Outlook. Output should be incremental repo changes with tests, not a huge risky rewrite.  
+Build the remaining next-stage easy-mail architecture in the current VS Code extension / TypeScript / VBScript repo. Preserve the completed v0.2 Single Mail Analysis work, then add Thread Timeline, Thread Store, Thread Engine, Security Gate and Redaction, Thread-level Analysis, unified reports, and later LLM Provider abstraction. The project must remain read-only: no PST/OST parsing, no automatic sending, no deleting, no moving, no archiving, no marking read/unread, and no writeback to Outlook. Output should be incremental repo changes with tests, not a huge risky rewrite.  
 最重要的并行规则：  
 1. 不要按 v0.3、v0.4、v0.5、v0.6 这种大版本粒度直接并行。  
 2. 要按 Wave + 文件所有权 + Integration Agent 拆分。  

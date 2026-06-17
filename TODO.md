@@ -2,13 +2,13 @@
 
 ## 当前交付状态
 
-- [x] 创建 `email-analysis` 项目目录。
+- [x] 创建 `easy-mail` 项目目录。
 - [x] 编写总体设计文档。
 - [x] 编写 step by step 实现步骤。
 - [x] 编写 VSIX 构建说明。
 - [x] 编写安全与合规边界。
 - [x] 初始化本地 git repo。
-- [x] 创建 GitHub repo：`Wsr-7/email-analysis`。
+- [x] 创建 GitHub repo：`Wsr-7/easy-mail`。
 - [x] 推送 `main` 分支。
 
 ## POC 实现任务

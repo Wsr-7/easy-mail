@@ -11,13 +11,13 @@ const configRaw = fs.readFileSync(configPath, "utf8");
 try {
   const packageJson = JSON.parse(packageRaw);
   const configJson = JSON.parse(configRaw);
-  packageJson.displayName = "Email Analysis POC Dev";
-  packageJson.description = "Development build of Email Analysis POC with gpt-5-mini as the default model.";
+  packageJson.displayName = "Easy Mail Dev";
+  packageJson.description = "Development build of Easy Mail with gpt-5-mini as the default model.";
   configJson.modelFamily = "gpt-5-mini";
   fs.writeFileSync(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`, "utf8");
   fs.writeFileSync(configPath, `${JSON.stringify(configJson, null, 2)}\n`, "utf8");
   cp.execSync("npm run compile", { cwd: root, stdio: "inherit", shell: true });
-  cp.execSync("npx vsce package --out releases/email-analysis-poc-dev-0.1.0.vsix", { cwd: root, stdio: "inherit", shell: true });
+  cp.execSync("npx vsce package --out releases/easy-mail-dev-0.1.0.vsix", { cwd: root, stdio: "inherit", shell: true });
 } finally {
   fs.writeFileSync(packagePath, packageRaw, "utf8");
   fs.writeFileSync(configPath, configRaw, "utf8");

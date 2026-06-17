@@ -1,4 +1,4 @@
-# Email Analysis 设计方案
+# Easy Mail 设计方案
 
 ## 1. 背景
 
@@ -119,13 +119,13 @@ Please review and approve the contract before EOD today.
 核心命令：
 
 ```text
-Email Analysis: Pull Mail
-Email Analysis: Analyze with Copilot
-Email Analysis: Refresh Dashboard
-Email Analysis: Open Digest
-Email Analysis: Open Summary
-Email Analysis: Export Report
-Email Analysis: Open Settings
+Easy Mail: Pull Mail
+Easy Mail: Analyze with Copilot
+Easy Mail: Refresh Dashboard
+Easy Mail: Open Digest
+Easy Mail: Open Summary
+Easy Mail: Export Report
+Easy Mail: Open Settings
 ```
 
 ### 3.4 AI 输出 JSON
@@ -186,7 +186,7 @@ P3: 通知或低优先级
 
 ```text
 ┌──────────────────────────────┬───────────────────────────────────────────────┐
-│ Sidebar: Email Analysis      │ Main Panel: Mail Intelligence Dashboard       │
+│ Sidebar: Easy Mail      │ Main Panel: Mail Intelligence Dashboard       │
 ├──────────────────────────────┼───────────────────────────────────────────────┤
 │ [Pull Mail]                  │ Today Mail Summary                           │
 │ [Analyze]                    │                                               │

@@ -1,3 +1,3 @@
-# Email Analysis POC
+# Easy Mail
 
 见 [README.md](./README.md)。

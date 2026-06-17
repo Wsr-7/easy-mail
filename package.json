@@ -1,13 +1,13 @@
 {
-  "name": "email-analysis-poc",
-  "displayName": "Email Analysis POC",
+  "name": "easy-mail",
+  "displayName": "Easy Mail",
   "description": "Local Outlook digest collection, Copilot analysis, and dashboard for classic Outlook.",
   "version": "0.1.0",
   "publisher": "Wsr-7",
   "private": true,
   "repository": {
     "type": "git",
-    "url": "https://github.com/Wsr-7/email-analysis.git"
+    "url": "https://github.com/Wsr-7/easy-mail.git"
   },
   "engines": {
     "vscode": "^1.90.0"
@@ -17,18 +17,18 @@
   ],
   "activationEvents": [
     "onStartupFinished",
-    "onCommand:emailAnalysis.pullMail",
-    "onCommand:emailAnalysis.loadMore",
-    "onCommand:emailAnalysis.generateSampleDigest",
-    "onCommand:emailAnalysis.analyze",
-    "onCommand:emailAnalysis.analyzeThread",
-    "onCommand:emailAnalysis.analyzeAllAllowed",
-    "onCommand:emailAnalysis.generateReports",
-    "onCommand:emailAnalysis.openDailyBrief",
-    "onCommand:emailAnalysis.openThreadReport",
-    "onCommand:emailAnalysis.openSingleMailReport",
-    "onCommand:emailAnalysis.clearLocalCache",
-    "onView:emailAnalysis.dashboard"
+    "onCommand:easyMail.pullMail",
+    "onCommand:easyMail.loadMore",
+    "onCommand:easyMail.generateSampleDigest",
+    "onCommand:easyMail.analyze",
+    "onCommand:easyMail.analyzeThread",
+    "onCommand:easyMail.analyzeAllAllowed",
+    "onCommand:easyMail.generateReports",
+    "onCommand:easyMail.openDailyBrief",
+    "onCommand:easyMail.openThreadReport",
+    "onCommand:easyMail.openSingleMailReport",
+    "onCommand:easyMail.clearLocalCache",
+    "onView:easyMail.dashboard"
   ],
   "main": "./out/extension.js",
   "files": [
@@ -45,9 +45,9 @@
   ],
   "contributes": {
     "configuration": {
-      "title": "Email Analysis",
+      "title": "Easy Mail",
       "properties": {
-        "emailAnalysis.rangeMode": {
+        "easyMail.rangeMode": {
           "type": "string",
           "order": 1,
           "enum": [
@@ -61,21 +61,21 @@
           "default": "recentHours",
           "description": "Mail pull range mode."
         },
-        "emailAnalysis.recentHours": {
+        "easyMail.recentHours": {
           "type": "number",
           "order": 2,
           "default": 24,
           "minimum": 1,
           "description": "Pull mails received within the last N hours."
         },
-        "emailAnalysis.maxItems": {
+        "easyMail.maxItems": {
           "type": "number",
           "order": 3,
           "default": 50,
           "minimum": 1,
           "description": "Maximum number of mails to pull."
         },
-        "emailAnalysis.folders": {
+        "easyMail.folders": {
           "type": "array",
           "order": 4,
           "items": {
@@ -86,20 +86,20 @@
           ],
           "description": "Outlook folders to scan."
         },
-        "emailAnalysis.bodyExcerptChars": {
+        "easyMail.bodyExcerptChars": {
           "type": "number",
           "order": 8,
           "default": 1500,
           "minimum": 100,
           "description": "Maximum body characters per mail sent to Copilot."
         },
-        "emailAnalysis.sampleMode": {
+        "easyMail.sampleMode": {
           "type": "boolean",
           "order": 14,
           "default": false,
           "description": "Generate sample mail data instead of reading Outlook."
         },
-        "emailAnalysis.modelFamily": {
+        "easyMail.modelFamily": {
           "type": "string",
           "order": 6,
           "enum": [
@@ -125,7 +125,7 @@
           "default": "gpt-5.4",
           "description": "Copilot model family used for analysis. The Dashboard model selector still reflects models exposed by your current VS Code session."
         },
-        "emailAnalysis.outputLanguage": {
+        "easyMail.outputLanguage": {
           "type": "string",
           "order": 5,
           "enum": [
@@ -139,20 +139,20 @@
           "default": "en-US",
           "description": "Dashboard and analysis output language."
         },
-        "emailAnalysis.analysisBatchSize": {
+        "easyMail.analysisBatchSize": {
           "type": "number",
           "order": 9,
           "default": 5,
           "minimum": 1,
           "description": "Maximum mails analyzed by Analyze Next Batch."
         },
-        "emailAnalysis.autoAnalyzeEnabled": {
+        "easyMail.autoAnalyzeEnabled": {
           "type": "boolean",
           "order": 10,
           "default": true,
           "description": "Allow mails under the classification threshold to be analyzed automatically."
         },
-        "emailAnalysis.autoAnalyzeMaxClassificationLevel": {
+        "easyMail.autoAnalyzeMaxClassificationLevel": {
           "type": "number",
           "order": 11,
           "enum": [
@@ -172,28 +172,28 @@
           "maximum": 3,
           "description": "Maximum mail classification allowed for automatic analysis."
         },
-        "emailAnalysis.mailStoreRetentionDays": {
+        "easyMail.mailStoreRetentionDays": {
           "type": "number",
           "order": 15,
           "default": 1,
           "minimum": 1,
           "description": "Raw local mail queue retention days."
         },
-        "emailAnalysis.mailIndexRetentionDays": {
+        "easyMail.mailIndexRetentionDays": {
           "type": "number",
           "order": 16,
           "default": 7,
           "minimum": 1,
           "description": "Local de-duplication index retention days."
         },
-        "emailAnalysis.analysisRetentionDays": {
+        "easyMail.analysisRetentionDays": {
           "type": "number",
           "order": 17,
           "default": 7,
           "minimum": 1,
           "description": "Analysis summary retention days."
         },
-        "emailAnalysis.importantSenders": {
+        "easyMail.importantSenders": {
           "type": "array",
           "order": 12,
           "items": {
@@ -208,61 +208,61 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "emailAnalysis",
-          "title": "Email Analysis",
+          "id": "easyMail",
+          "title": "Easy Mail",
           "icon": "media/icon.svg"
         }
       ]
     },
     "views": {
-      "emailAnalysis": [
+      "easyMail": [
         {
           "type": "webview",
-          "id": "emailAnalysis.dashboard",
+          "id": "easyMail.dashboard",
           "name": "Dashboard"
         }
       ]
     },
     "walkthroughs": [
       {
-        "id": "emailAnalysis.gettingStarted",
-        "title": "Get Started with Email Analysis",
+        "id": "easyMail.gettingStarted",
+        "title": "Get Started with Easy Mail",
         "description": "Collect local Outlook mail, review pending items, and analyze with GitHub Copilot.",
         "steps": [
           {
-            "id": "emailAnalysis.openDashboard",
+            "id": "easyMail.openDashboard",
             "title": "Open the Dashboard",
-            "description": "Open the Email Analysis view from the Activity Bar. Use the language button in the top-right corner to switch between English and Simplified Chinese.",
+            "description": "Open the Easy Mail view from the Activity Bar. Use the language button in the top-right corner to switch between English and Simplified Chinese.",
             "media": {
               "markdown": "readme.md"
             },
             "completionEvents": [
-              "onView:emailAnalysis.dashboard"
+              "onView:easyMail.dashboard"
             ]
           },
           {
-            "id": "emailAnalysis.configure",
+            "id": "easyMail.configure",
             "title": "Configure Mail Range and Model",
             "description": "Click Settings File to edit VS Code Settings. VS Code Settings are the single source of truth; the dashboard refreshes when settings change.",
             "completionEvents": [
-              "onCommand:emailAnalysis.openSettings"
+              "onCommand:easyMail.openSettings"
             ]
           },
           {
-            "id": "emailAnalysis.fetch",
+            "id": "easyMail.fetch",
             "title": "Fetch New Mail",
             "description": "Click Fetch New to collect recent Outlook mail. After the first fetch, More History becomes available for loading older mail per folder.",
             "completionEvents": [
-              "onCommand:emailAnalysis.pullMail"
+              "onCommand:easyMail.pullMail"
             ]
           },
           {
-            "id": "emailAnalysis.analyze",
+            "id": "easyMail.analyze",
             "title": "Analyze with Copilot",
             "description": "Choose an Analysis Model from the dashboard, then run Analyze Next Batch, Analyze Selected, or Analyze All Allowed.",
             "completionEvents": [
-              "onCommand:emailAnalysis.analyze",
-              "onCommand:emailAnalysis.analyzeAllAllowed"
+              "onCommand:easyMail.analyze",
+              "onCommand:easyMail.analyzeAllAllowed"
             ]
           }
         ]
@@ -270,75 +270,75 @@
     ],
     "commands": [
       {
-        "command": "emailAnalysis.pullMail",
-        "title": "Email Analysis: Fetch New Mail"
+        "command": "easyMail.pullMail",
+        "title": "Easy Mail: Fetch New Mail"
       },
       {
-        "command": "emailAnalysis.loadMore",
-        "title": "Email Analysis: More History"
+        "command": "easyMail.loadMore",
+        "title": "Easy Mail: More History"
       },
       {
-        "command": "emailAnalysis.generateSampleDigest",
-        "title": "Email Analysis: Generate Sample Digest"
+        "command": "easyMail.generateSampleDigest",
+        "title": "Easy Mail: Generate Sample Digest"
       },
       {
-        "command": "emailAnalysis.analyze",
-        "title": "Email Analysis: Analyze Next Batch with Copilot"
+        "command": "easyMail.analyze",
+        "title": "Easy Mail: Analyze Next Batch with Copilot"
       },
       {
-        "command": "emailAnalysis.analyzeThread",
-        "title": "Email Analysis: Analyze Thread with Copilot"
+        "command": "easyMail.analyzeThread",
+        "title": "Easy Mail: Analyze Thread with Copilot"
       },
       {
-        "command": "emailAnalysis.analyzeAllAllowed",
-        "title": "Email Analysis: Analyze All Allowed with Copilot"
+        "command": "easyMail.analyzeAllAllowed",
+        "title": "Easy Mail: Analyze All Allowed with Copilot"
       },
       {
-        "command": "emailAnalysis.refreshDashboard",
-        "title": "Email Analysis: Refresh Dashboard"
+        "command": "easyMail.refreshDashboard",
+        "title": "Easy Mail: Refresh Dashboard"
       },
       {
-        "command": "emailAnalysis.openDigest",
-        "title": "Email Analysis: Open Digest"
+        "command": "easyMail.openDigest",
+        "title": "Easy Mail: Open Digest"
       },
       {
-        "command": "emailAnalysis.openSummary",
-        "title": "Email Analysis: Open Summary"
+        "command": "easyMail.openSummary",
+        "title": "Easy Mail: Open Summary"
       },
       {
-        "command": "emailAnalysis.generateReports",
-        "title": "Email Analysis: Generate Reports"
+        "command": "easyMail.generateReports",
+        "title": "Easy Mail: Generate Reports"
       },
       {
-        "command": "emailAnalysis.openDailyBrief",
-        "title": "Email Analysis: Open Daily Brief"
+        "command": "easyMail.openDailyBrief",
+        "title": "Easy Mail: Open Daily Brief"
       },
       {
-        "command": "emailAnalysis.openThreadReport",
-        "title": "Email Analysis: Open Thread Report"
+        "command": "easyMail.openThreadReport",
+        "title": "Easy Mail: Open Thread Report"
       },
       {
-        "command": "emailAnalysis.openSingleMailReport",
-        "title": "Email Analysis: Open Single Mail Report"
+        "command": "easyMail.openSingleMailReport",
+        "title": "Easy Mail: Open Single Mail Report"
       },
       {
-        "command": "emailAnalysis.openSettings",
-        "title": "Email Analysis: Open Settings"
+        "command": "easyMail.openSettings",
+        "title": "Easy Mail: Open Settings"
       },
       {
-        "command": "emailAnalysis.openPromptConfig",
-        "title": "Email Analysis: Open Prompt Config"
+        "command": "easyMail.openPromptConfig",
+        "title": "Easy Mail: Open Prompt Config"
       },
       {
-        "command": "emailAnalysis.clearLocalCache",
-        "title": "Email Analysis: Clear Local Cache"
+        "command": "easyMail.clearLocalCache",
+        "title": "Easy Mail: Clear Local Cache"
       }
     ]
   },
   "scripts": {
     "compile": "node scripts/clean-out.js && tsc -p .",
     "test": "npm run compile && node --test out/test/digest.test.js out/test/analysis-schema.test.js out/test/summary.test.js out/test/dashboard-state.test.js out/test/mail-store.test.js out/test/classification.test.js out/test/prompt-config.test.js out/test/thread-engine.test.js out/test/thread-timeline.test.js out/test/redaction.test.js out/test/security-gate.test.js out/test/thread-analysis-schema.test.js out/test/thread-prompt-builder.test.js out/test/report-single-mail.test.js out/test/report-thread.test.js out/test/report-daily.test.js out/test/llm-provider.test.js",
-    "package:vsix": "npm run compile && vsce package --out releases/email-analysis-poc-0.1.0.vsix",
+    "package:vsix": "npm run compile && vsce package --out releases/easy-mail-0.1.0.vsix",
     "package:vsix:dev": "node scripts/package-dev-vsix.js",
     "validate:sample": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-sample-validation.ps1"
   },

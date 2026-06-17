@@ -555,7 +555,7 @@ Function BuildSampleRecord(byVal recordIndex, byVal subject, byVal senderName, b
   Set record = CreateObject("Scripting.Dictionary")
   record.CompareMode = 1
   record.Add "mailId", "mail-" & Right("000" & CStr(recordIndex), 3)
-  record.Add "internetMessageId", "<sample-" & CStr(recordIndex) & "@email-analysis.local>"
+  record.Add "internetMessageId", "<sample-" & CStr(recordIndex) & "@easy-mail.local>"
   record.Add "entryId", "sample-entry-" & CStr(recordIndex)
   record.Add "conversationId", "sample-thread-" & CStr(recordIndex)
   record.Add "conversationIndex", "000" & CStr(recordIndex)

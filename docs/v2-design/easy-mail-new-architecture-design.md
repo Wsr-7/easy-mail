@@ -1,6 +1,6 @@
-# Email Analysis 新版设计架构与实现方案
+# Easy Mail 新版设计架构与实现方案
 
-> 面向仓库：`Wsr-7/email-analysis`  
+> 面向仓库：`Wsr-7/easy-mail`  
 > 文档目的：交给 Codex / AI Coding Agent 继续做功能实现  
 > 版本建议：从当前 `0.1.x POC` 演进到 `0.2 ~ 0.6`  
 > 生成日期：2026-06-17  
@@ -138,7 +138,7 @@ Reports 是产物。
 推荐 README 里的定位改成：
 
 ```text
-Email Analysis 是一个面向 Windows classic Outlook + VS Code 的本地只读邮件分析工作台。
+Easy Mail 是一个面向 Windows classic Outlook + VS Code 的本地只读邮件分析工作台。
 它提供两种互补的一等分析视图：
 
 1. Single Mail Analysis
@@ -1454,34 +1454,34 @@ OpenAICompatibleProvider
 
 ```json
 {
-  "emailAnalysis.thread.enabled": true,
-  "emailAnalysis.thread.minMessageCount": 2,
-  "emailAnalysis.thread.longThreadThreshold": 5,
-  "emailAnalysis.thread.maxMessagesPerThread": 50,
-  "emailAnalysis.thread.bodyCharsPerMessage": 2000,
-  "emailAnalysis.thread.extractBodyDelta": true,
-  "emailAnalysis.thread.deduplicateBody": true,
+  "easyMail.thread.enabled": true,
+  "easyMail.thread.minMessageCount": 2,
+  "easyMail.thread.longThreadThreshold": 5,
+  "easyMail.thread.maxMessagesPerThread": 50,
+  "easyMail.thread.bodyCharsPerMessage": 2000,
+  "easyMail.thread.extractBodyDelta": true,
+  "easyMail.thread.deduplicateBody": true,
 
-  "emailAnalysis.securityGate.enabled": true,
-  "emailAnalysis.securityGate.defaultAction": "manual_confirm",
-  "emailAnalysis.securityGate.hardBlockKeywords": [],
-  "emailAnalysis.securityGate.manualConfirmKeywords": [],
-  "emailAnalysis.securityGate.allowedFolders": [],
-  "emailAnalysis.securityGate.deniedFolders": [],
-  "emailAnalysis.securityGate.allowedSenders": [],
-  "emailAnalysis.securityGate.deniedSenders": [],
+  "easyMail.securityGate.enabled": true,
+  "easyMail.securityGate.defaultAction": "manual_confirm",
+  "easyMail.securityGate.hardBlockKeywords": [],
+  "easyMail.securityGate.manualConfirmKeywords": [],
+  "easyMail.securityGate.allowedFolders": [],
+  "easyMail.securityGate.deniedFolders": [],
+  "easyMail.securityGate.allowedSenders": [],
+  "easyMail.securityGate.deniedSenders": [],
 
-  "emailAnalysis.redaction.enabled": true,
-  "emailAnalysis.redaction.email": true,
-  "emailAnalysis.redaction.phone": true,
-  "emailAnalysis.redaction.url": true,
-  "emailAnalysis.redaction.ip": true,
-  "emailAnalysis.redaction.token": true,
-  "emailAnalysis.redaction.money": true,
-  "emailAnalysis.redaction.customPatterns": [],
+  "easyMail.redaction.enabled": true,
+  "easyMail.redaction.email": true,
+  "easyMail.redaction.phone": true,
+  "easyMail.redaction.url": true,
+  "easyMail.redaction.ip": true,
+  "easyMail.redaction.token": true,
+  "easyMail.redaction.money": true,
+  "easyMail.redaction.customPatterns": [],
 
-  "emailAnalysis.provider.type": "copilot",
-  "emailAnalysis.reports.defaultFormat": "markdown"
+  "easyMail.provider.type": "copilot",
+  "easyMail.reports.defaultFormat": "markdown"
 }
 ```
 
@@ -2287,9 +2287,9 @@ feature/v0.6-reports
 
 ## 25. 参考资料
 
-1. 当前仓库 README：`https://github.com/Wsr-7/email-analysis`
-2. 当前 User Guide：`https://github.com/Wsr-7/email-analysis/blob/main/user%20guide.md`
-3. 当前验收标准：`https://github.com/Wsr-7/email-analysis/blob/main/docs/acceptance-criteria.md`
+1. 当前仓库 README：`https://github.com/Wsr-7/easy-mail`
+2. 当前 User Guide：`https://github.com/Wsr-7/easy-mail/blob/main/user%20guide.md`
+3. 当前验收标准：`https://github.com/Wsr-7/easy-mail/blob/main/docs/acceptance-criteria.md`
 4. Microsoft: Feature comparison between new Outlook and classic Outlook  
    `https://support.microsoft.com/en-us/office/feature-comparison-between-new-outlook-and-classic-outlook-de453583-1e76-48bf-975a-2e9cd2ee16dd`
 5. Microsoft: Outlook MailItem.ConversationID  

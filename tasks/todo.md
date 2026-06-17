@@ -43,7 +43,7 @@
 
 ## v0.2 / Issue 1: Single Mail Analysis Schema and Evidence
 
-- [x] 目标：只实现 `email-analysis-repo-specific-implementation-plan.md` 中 v0.2 / Issue 1
+- [x] 目标：只实现 `easy-mail-repo-specific-implementation-plan.md` 中 v0.2 / Issue 1
 - [x] 验收：旧 JSON 仍可解析
 - [x] 验收：新 JSON 中 optional `source` / `evidence` 可保留
 - [x] 验收：summary 可选显示 evidence
@@ -52,7 +52,7 @@
 
 ### Working Notes
 
-- `architecture-background.md` 只作为背景；本轮唯一执行依据是 `docs/v2-design/email-analysis-repo-specific-implementation-plan.md`。
+- `architecture-background.md` 只作为背景；本轮唯一执行依据是 `docs/v2-design/easy-mail-repo-specific-implementation-plan.md`。
 - 不实现 Issue 2/3，不改 thread/security gate，不打包，除非后续明确要求。
 - 保留 existing single mail analysis pipeline，不改变 category / priority / draft reply 行为。
 
@@ -67,7 +67,7 @@
 
 ### Working Notes
 
-- 本阶段从 `docs/v2-design/email-analysis-repo-specific-implementation-plan.md` 的 v0.3 Thread Timeline MVP 开始。
+- 本阶段从 `docs/v2-design/easy-mail-repo-specific-implementation-plan.md` 的 v0.3 Thread Timeline MVP 开始。
 - `src/extension.ts` 暂不修改，留给后续 Thread Timeline Integration Agent。
 - `scripts/collect-outlook-mails.vbs`、`src/lib/digest.ts`、`src/lib/mail-store.ts` 归 Thread Data Agent。
 - `src/lib/thread-store.ts` / `src/lib/thread-engine.ts` 归 Thread Engine Agent。

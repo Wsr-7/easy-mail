@@ -4,14 +4,14 @@
 
 验收标准：
 
-- `email-analysis` 是独立 git repo。
+- `easy-mail` 是独立 git repo。
 - `docs/` 下有设计、实现、VSIX、安全文档。
-- 已推送到 `Wsr-7/email-analysis`。
+- 已推送到 `Wsr-7/easy-mail`。
 
 步骤：
 
 ```text
-1. 创建 email-analysis 目录。
+1. 创建 easy-mail 目录。
 2. 创建 README.md 和 docs。
 3. 初始化 git repo。
 4. 提交文档。
@@ -172,7 +172,7 @@ priority 只能使用 P0、P1、P2、P3。
 1. 安装 .vsix。
 2. 打开 VS Code。
 3. 登录 GitHub Copilot。
-4. 打开 Email Analysis sidebar。
+4. 打开 Easy Mail sidebar。
 5. 点击 Pull Mail。
 6. 检查 mail-digest.md。
 7. 点击 Analyze。

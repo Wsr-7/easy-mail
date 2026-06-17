@@ -1,7 +1,7 @@
-# Email Analysis 0.2+ Repo-Specific 新版设计架构与 Codex 实施方案
+# Easy Mail 0.2+ Repo-Specific 新版设计架构与 Codex 实施方案
 
 > 版本：repo 源码审阅版  
-> 基于源码包：`email-analysis-0.1 2.zip`  
+> 基于源码包：`easy-mail-0.1 2.zip`  
 > 当前项目形态：VS Code Extension POC，面向 `Windows + classic Outlook + GitHub Copilot`  
 > 目标读者：后续接手实现的 Codex / AI Coding Agent / 开发者  
 > 核心原则：**只读、本地、安全、Single Mail 与 Thread Mail 双一等公民**
@@ -27,7 +27,7 @@
 
 ## 1. 项目最终定位
 
-当前项目不应该继续定位为简单的 “Email Analysis POC”。建议演进为：
+当前项目不应该继续定位为简单的 “Easy Mail”。建议演进为：
 
 > **Local Read-only Outlook Mail Intelligence Desk**  
 > 一个面向 classic Outlook 的本地只读邮件分析工作台，同时支持单封邮件分析与邮件线程分析。
@@ -92,7 +92,7 @@ classic Outlook 本地只读采集
 当前 zip 解压后的主要结构如下：
 
 ```text
-email-analysis-0.1/
+easy-mail-0.1/
   README.md
   TODO.md
   agents.md
@@ -1758,7 +1758,7 @@ partialContext 正确显示。
 ### 13.2 每个 issue 的通用 Codex Prompt 模板
 
 ```text
-你正在维护一个 VS Code extension 项目 email-analysis。
+你正在维护一个 VS Code extension 项目 easy-mail。
 当前项目是 Windows + classic Outlook + VBScript + VS Code Copilot 的本地只读邮件分析工具。
 
 硬约束：

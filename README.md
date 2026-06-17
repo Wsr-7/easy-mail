@@ -1,6 +1,6 @@
-# Email Analysis POC
+# Easy Mail
 
-`Email Analysis POC` 是一个面向 `classic Outlook + VS Code + GitHub Copilot` 的本地邮件分析插件原型。
+`Easy Mail` 是一个面向 `classic Outlook + VS Code + GitHub Copilot` 的本地邮件分析插件原型。
 
 它完成这条本地链路：
 

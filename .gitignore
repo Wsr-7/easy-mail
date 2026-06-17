@@ -1,7 +1,7 @@
 data/
 *.vsix
 !releases/*.vsix
-releases/email-analysis-poc-dev-*.vsix
+releases/*-dev-*.vsix
 node_modules/
 out/
 dist/
