@@ -88,3 +88,16 @@
 - 本轮只完成 v0.3 Thread Timeline 阅读能力，不调用 Copilot 做 Thread AI。
 - 没有新增 Outlook 写回能力，仍保持只读。
 - `src/extension.ts` 只做 thread-store 接入和 dashboard render 扩展。
+
+## v0.4 Wave 2: Redaction + Security Gate
+
+- [x] Wave 2E：新增 Redaction 纯模块和单测
+- [x] Wave 2F：新增 Security Gate 纯模块和单测
+- [x] Wave 2：统一接入测试脚本并运行 `npm test`
+- [x] Wave 2：提交纯模块小提交
+
+### Working Notes
+
+- 本阶段先不接 `src/extension.ts`，不改变现有 Single Mail 分析入口。
+- `classification.ts` 保持为 Security Gate 的输入，不推倒重写。
+- Wave 2 Integration 才接入 redacted payload、block/manual_confirm 行为和 Dashboard 安全状态。
