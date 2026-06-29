@@ -277,6 +277,7 @@ Function BuildMailRecord(byRef mail, byVal folderPath, byVal bodyChars, byVal re
   record.Add "mailId", "mail-" & Right("000" & CStr(recordIndex), 3)
   record.Add "internetMessageId", SafeInternetMessageId(mail)
   record.Add "entryId", SafeString(mail.EntryID)
+  record.Add "storeId", SafeStoreId(mail)
   record.Add "conversationId", SafeConversationId(mail)
   record.Add "conversationIndex", SafeConversationIndex(mail)
   record.Add "subject", SafeString(mail.Subject)
@@ -306,6 +307,18 @@ Function SafeInternetMessageId(byRef mail)
   If Err.Number <> 0 Then
     Err.Clear
     SafeInternetMessageId = ""
+  End If
+  On Error GoTo 0
+End Function
+
+Function SafeStoreId(byRef mail)
+  On Error Resume Next
+  Dim parentFolder
+  Set parentFolder = mail.Parent
+  SafeStoreId = SafeString(parentFolder.StoreID)
+  If Err.Number <> 0 Then
+    Err.Clear
+    SafeStoreId = ""
   End If
   On Error GoTo 0
 End Function
@@ -501,6 +514,7 @@ Sub WriteDigest(byVal outputPath, byRef target, byRef records, byVal recordCount
     content = content & "## Mail: " & record("mailId") & vbCrLf & vbCrLf
     content = content & "InternetMessageId: " & EscapeMarkdownInline(record("internetMessageId")) & vbCrLf
     content = content & "EntryId: " & EscapeMarkdownInline(record("entryId")) & vbCrLf
+    content = content & "StoreId: " & EscapeMarkdownInline(record("storeId")) & vbCrLf
     content = content & "ConversationId: " & EscapeMarkdownInline(record("conversationId")) & vbCrLf
     content = content & "ConversationIndex: " & EscapeMarkdownInline(record("conversationIndex")) & vbCrLf
     content = content & "Subject: " & EscapeMarkdownInline(record("subject")) & vbCrLf
@@ -557,6 +571,7 @@ Function BuildSampleRecord(byVal recordIndex, byVal subject, byVal senderName, b
   record.Add "mailId", "mail-" & Right("000" & CStr(recordIndex), 3)
   record.Add "internetMessageId", "<sample-" & CStr(recordIndex) & "@easy-mail.local>"
   record.Add "entryId", "sample-entry-" & CStr(recordIndex)
+  record.Add "storeId", "sample-store"
   record.Add "conversationId", "sample-thread-" & CStr(recordIndex)
   record.Add "conversationIndex", "000" & CStr(recordIndex)
   record.Add "subject", subject

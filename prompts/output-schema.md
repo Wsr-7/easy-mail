@@ -33,6 +33,7 @@ Required item fields:
 Optional item fields:
 - source
 - evidence
+- draftReplyParts
 
 Optional source fields:
 - mailId
@@ -44,6 +45,12 @@ Optional evidence item fields:
 - sourceMailId
 - quote
 - reason
+
+Optional draftReplyParts fields:
+- GREETING
+- MAIN_MESSAGE
+- REQUESTED_ACTION
+- CLOSING
 
 Use `evidence` only for short mail-body excerpts or metadata that directly support the classification, priority, or suggested action. Do not invent quotes. If evidence is uncertain, omit it and set `needsOriginalMailCheck` to `true`.
 

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="210" viewBox="0 0 980 210">
+<rect width="980" height="210" fill="#14161A"/>
+<text x="24" y="34" fill="#8F98A3" font-family="Arial" font-size="12" font-weight="700">D3 / TOP ACTION AREA</text>
+<rect x="24" y="52" width="932" height="126" rx="8" fill="#1E2228" stroke="#343A43"/>
+<text x="48" y="84" fill="#D7DCE2" font-family="Arial" font-size="15" font-weight="700">Split Workbench</text>
+<text x="48" y="108" fill="#8F98A3" font-family="Arial" font-size="12">Sticky command strip. Detail actions move to selected item pane.</text>
+<rect x="48" y="132" width="116" height="30" rx="5" fill="#2B6F88"/><text x="70" y="152" fill="#F4F8FB" font-family="Arial" font-size="12" font-weight="700">Fetch New</text>
+<rect x="174" y="132" width="154" height="30" rx="5" fill="#24303A"/><text x="194" y="152" fill="#D7DCE2" font-family="Arial" font-size="12">Analyze Batch</text>
+<rect x="338" y="132" width="88" height="30" rx="5" fill="#20242A" stroke="#3A414B"/><text x="358" y="152" fill="#B7C0CA" font-family="Arial" font-size="12">Refresh</text>
+<rect x="662" y="132" width="112" height="30" rx="5" fill="#1B1F25" stroke="#303740"/><text x="690" y="152" fill="#AAB3BD" font-family="Arial" font-size="12">Reports</text>
+<rect x="784" y="132" width="112" height="30" rx="5" fill="#1B1F25" stroke="#303740"/><text x="812" y="152" fill="#AAB3BD" font-family="Arial" font-size="12">Settings</text>
+</svg>

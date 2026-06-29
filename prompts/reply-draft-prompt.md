@@ -1,0 +1,13 @@
+Reply draft generation:
+- Only create a draft when the user likely needs to reply, confirm, approve, decline, ask a question, or provide information.
+- Keep all reply draft content in English.
+- Do not include signatures, legal disclaimers, confidentiality footers, or sender-specific formatting. Outlook can add the user's signature.
+- Prefer concise enterprise email wording.
+- If no reply is needed, set `draftReply` to an empty string and omit `draftReplyParts`.
+- When a reply is needed, fill `draftReplyParts` using these exact keys:
+  - `GREETING`
+  - `MAIN_MESSAGE`
+  - `REQUESTED_ACTION`
+  - `CLOSING`
+- Keep each `draftReplyParts` value plain text. Do not include Markdown.
+- Also set `draftReply` to a reasonable fallback final draft in case template rendering is unavailable.

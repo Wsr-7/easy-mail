@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="220" viewBox="0 0 980 220">
+<rect width="980" height="220" fill="#14161A"/>
+<text x="24" y="34" fill="#8F98A3" font-family="Arial" font-size="12" font-weight="700">D3 / RUNTIME STATUS</text>
+<rect x="24" y="52" width="932" height="140" rx="8" fill="#1E2228" stroke="#343A43"/>
+<rect x="48" y="78" width="220" height="88" rx="6" fill="#20242A" stroke="#3A414B"/>
+<text x="68" y="104" fill="#8F98A3" font-family="Arial" font-size="11">CURRENT STATE</text>
+<text x="68" y="136" fill="#D7DCE2" font-family="Arial" font-size="20" font-weight="700">Idle</text>
+<rect x="288" y="78" width="220" height="88" rx="6" fill="#20242A" stroke="#3A414B"/>
+<text x="308" y="104" fill="#8F98A3" font-family="Arial" font-size="11">SELECTION</text>
+<text x="308" y="136" fill="#D7DCE2" font-family="Arial" font-size="20" font-weight="700">2 selected</text>
+<rect x="528" y="78" width="380" height="88" rx="6" fill="#20242A" stroke="#3A414B"/>
+<text x="548" y="104" fill="#8F98A3" font-family="Arial" font-size="11">NEXT ACTION</text>
+<text x="548" y="136" fill="#D7DCE2" font-family="Arial" font-size="15" font-weight="700">Review selected detail pane, then analyze selected.</text>
+</svg>

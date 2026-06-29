@@ -6,6 +6,7 @@ export interface StoredMail {
   sourceMailId: string;
   internetMessageId: string;
   entryId: string;
+  storeId?: string;
   conversationId?: string;
   conversationIndex?: string;
   subject: string;
@@ -39,6 +40,7 @@ export interface MailIndexItem {
   sourceMailId: string;
   internetMessageId: string;
   entryId: string;
+  storeId?: string;
   receivedTime: string;
   folder: string;
   lastSeenAt: string;
@@ -143,6 +145,7 @@ export function mergeDigestIntoIndex(index: MailIndex, digest: DigestData): Mail
       sourceMailId: mail.sourceMailId,
       internetMessageId: mail.internetMessageId,
       entryId: mail.entryId,
+      storeId: mail.storeId,
       receivedTime: mail.receivedTime,
       folder: mail.folder,
       lastSeenAt: seenAt
@@ -162,6 +165,7 @@ export function digestItemToStoredMail(item: DigestItem, pulledAt: string): Stor
     sourceMailId: item.mailId,
     internetMessageId: item.internetMessageId,
     entryId: item.entryId,
+    storeId: stringValue(item.storeId),
     conversationId: stringValue(item.conversationId),
     conversationIndex: stringValue(item.conversationIndex),
     subject: item.subject,
@@ -300,6 +304,7 @@ function normalizeStoredMail(input: unknown): StoredMail | null {
     sourceMailId: String(input.sourceMailId || ""),
     internetMessageId: String(input.internetMessageId || ""),
     entryId: String(input.entryId || ""),
+    storeId: String(input.storeId || ""),
     conversationId: String(input.conversationId || ""),
     conversationIndex: String(input.conversationIndex || ""),
     subject: String(input.subject || ""),
@@ -336,6 +341,7 @@ function normalizeMailIndexItem(input: unknown): MailIndexItem | null {
     sourceMailId: String(input.sourceMailId || ""),
     internetMessageId: String(input.internetMessageId || ""),
     entryId: String(input.entryId || ""),
+    storeId: String(input.storeId || ""),
     receivedTime: String(input.receivedTime || ""),
     folder: String(input.folder || ""),
     lastSeenAt: String(input.lastSeenAt || "")

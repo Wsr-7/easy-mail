@@ -43,6 +43,11 @@ test("parseAnalysisJson preserves optional source and evidence fields", () => {
         reason: "Direct request in the mail body.",
         suggestedAction: "Send status update.",
         draftReply: "I will send the status update.",
+        draftReplyParts: {
+          GREETING: "Hi Alice,",
+          MAIN_MESSAGE: "I will send the status update.",
+          CLOSING: "Thanks,"
+        },
         confidence: 0.9,
         needsOriginalMailCheck: false,
         source: {
@@ -68,6 +73,8 @@ test("parseAnalysisJson preserves optional source and evidence fields", () => {
     entryId: "entry-001",
     folder: "Inbox"
   });
+  assert.equal(analysis.items[0].draftReplyParts?.GREETING, "Hi Alice,");
+  assert.equal(analysis.items[0].draftReplyParts?.MAIN_MESSAGE, "I will send the status update.");
   assert.deepEqual(analysis.items[0].evidence, [
     {
       sourceMailId: "mail-001",

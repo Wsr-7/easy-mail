@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="220" viewBox="0 0 980 220">
+<rect width="980" height="220" fill="#181A1F"/>
+<text x="24" y="34" fill="#8F98A3" font-family="Arial" font-size="12" font-weight="700">D1 / CONFIGURATION SETTINGS</text>
+<rect x="24" y="52" width="932" height="140" rx="8" fill="#1C2026" stroke="#303740"/>
+<text x="48" y="84" fill="#D7DCE2" font-family="Arial" font-size="15" font-weight="700">Settings</text>
+<text x="126" y="84" fill="#8F98A3" font-family="Arial" font-size="12">quiet shortcut / VS Code Settings is source of truth</text>
+<rect x="48" y="112" width="160" height="42" rx="6" fill="#20242A" stroke="#343A43"/>
+<text x="64" y="137" fill="#AEB7C2" font-family="Arial" font-size="12">Range: Recent 24h</text>
+<rect x="218" y="112" width="190" height="42" rx="6" fill="#20242A" stroke="#343A43"/>
+<text x="234" y="137" fill="#AEB7C2" font-family="Arial" font-size="12">Folders: Inbox; Alerts</text>
+<rect x="418" y="112" width="200" height="42" rx="6" fill="#20242A" stroke="#343A43"/>
+<text x="434" y="137" fill="#AEB7C2" font-family="Arial" font-size="12">Max auto: REGISTERED</text>
+<rect x="746" y="112" width="112" height="30" rx="5" fill="#1D2026" stroke="#3A414B"/>
+<text x="770" y="132" fill="#AAB3BD" font-family="Arial" font-size="12">Edit Settings</text>
+</svg>

@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900">
+  <rect width="1440" height="900" fill="#14161A"/>
+  <text x="70" y="62" fill="#D8DDE4" font-family="Arial" font-size="24" font-weight="700">D3 Split Workbench · Anatomy</text>
+  <text x="70" y="92" fill="#8F98A3" font-family="Arial" font-size="14">Navigation → Queue scan → Selected detail. This is a workbench, not a long dashboard.</text>
+
+  <rect x="70" y="128" width="1300" height="86" rx="10" fill="#1E2228" stroke="#343A43"/>
+  <text x="100" y="162" fill="#D8DDE4" font-family="Arial" font-size="16" font-weight="700">Sticky Runtime Bar</text>
+  <text x="100" y="188" fill="#8F98A3" font-family="Arial" font-size="13">Global state, safe global actions, last pull, batch size, model state. Avoid placing item-specific actions here.</text>
+  <rect x="922" y="152" width="114" height="34" rx="5" fill="#2B6F88"/>
+  <text x="947" y="174" fill="#F4F8FB" font-family="Arial" font-size="12" font-weight="700">Fetch New</text>
+  <rect x="1050" y="152" width="138" height="34" rx="5" fill="#24303A"/>
+  <text x="1078" y="174" fill="#D7DCE2" font-family="Arial" font-size="12">Analyze Batch</text>
+  <rect x="1202" y="152" width="96" height="34" rx="5" fill="#20242A" stroke="#3A414B"/>
+  <text x="1228" y="174" fill="#B7C0CA" font-family="Arial" font-size="12">Refresh</text>
+
+  <rect x="70" y="248" width="252" height="548" rx="10" fill="#1E2228" stroke="#343A43"/>
+  <text x="96" y="284" fill="#D8DDE4" font-family="Arial" font-size="17" font-weight="700">Left Navigation Rail</text>
+  <text x="96" y="310" fill="#8F98A3" font-family="Arial" font-size="13">Counts become navigation.</text>
+  <rect x="96" y="344" width="200" height="40" rx="6" fill="#242B34" stroke="#4A3B36"/>
+  <text x="114" y="369" fill="#F0D4CA" font-family="Arial" font-size="13">Needs Review</text>
+  <text x="274" y="369" fill="#F0D4CA" font-family="Arial" font-size="13" text-anchor="end">6</text>
+  <rect x="96" y="396" width="200" height="40" rx="6" fill="#20242A" stroke="#343A43"/>
+  <text x="114" y="421" fill="#D8DDE4" font-family="Arial" font-size="13">Pending</text>
+  <text x="274" y="421" fill="#D8DDE4" font-family="Arial" font-size="13" text-anchor="end">18</text>
+  <rect x="96" y="448" width="200" height="40" rx="6" fill="#181B20" stroke="#2D333C"/>
+  <text x="114" y="473" fill="#9EA7B2" font-family="Arial" font-size="13">Threads</text>
+  <text x="274" y="473" fill="#9EA7B2" font-family="Arial" font-size="13" text-anchor="end">9</text>
+  <text x="96" y="548" fill="#77808A" font-family="Arial" font-size="12">Design role:</text>
+  <text x="96" y="574" fill="#AEB7C2" font-family="Arial" font-size="12">Switch queue modes.</text>
+  <text x="96" y="598" fill="#AEB7C2" font-family="Arial" font-size="12">Expose utility entries.</text>
+  <text x="96" y="622" fill="#AEB7C2" font-family="Arial" font-size="12">Keep stats actionable.</text>
+
+  <rect x="352" y="248" width="438" height="548" rx="10" fill="#1E2228" stroke="#343A43"/>
+  <text x="378" y="284" fill="#D8DDE4" font-family="Arial" font-size="17" font-weight="700">Center Active Queue</text>
+  <text x="378" y="310" fill="#8F98A3" font-family="Arial" font-size="13">Dense scan list. Selection changes the right pane.</text>
+  <rect x="378" y="344" width="386" height="68" rx="6" fill="#242B34" stroke="#4A3B36"/>
+  <rect x="378" y="344" width="5" height="68" fill="#C59D5F"/>
+  <text x="402" y="372" fill="#F0D4CA" font-family="Arial" font-size="14" font-weight="700">Selected mail / thread</text>
+  <text x="402" y="396" fill="#C9A89C" font-family="Arial" font-size="12">Reason, sender, time, chips</text>
+  <rect x="378" y="424" width="386" height="60" rx="6" fill="#20242A" stroke="#343A43"/>
+  <text x="402" y="459" fill="#D8DDE4" font-family="Arial" font-size="13">Queue item</text>
+  <rect x="378" y="496" width="386" height="60" rx="6" fill="#20242A" stroke="#343A43"/>
+  <text x="402" y="531" fill="#D8DDE4" font-family="Arial" font-size="13">Queue item</text>
+  <text x="378" y="618" fill="#77808A" font-family="Arial" font-size="12">Design role:</text>
+  <text x="378" y="644" fill="#AEB7C2" font-family="Arial" font-size="12">Scan, select, batch-select.</text>
+  <text x="378" y="668" fill="#AEB7C2" font-family="Arial" font-size="12">No long summaries here.</text>
+  <text x="378" y="692" fill="#AEB7C2" font-family="Arial" font-size="12">Rows stay compact.</text>
+
+  <rect x="820" y="248" width="550" height="548" rx="10" fill="#1E2228" stroke="#4A3B36"/>
+  <text x="848" y="284" fill="#F0D4CA" font-family="Arial" font-size="17" font-weight="700">Right Selected Detail Pane</text>
+  <text x="848" y="310" fill="#C9A89C" font-family="Arial" font-size="13">Full context, rationale, thread preview, actions.</text>
+  <rect x="848" y="344" width="230" height="36" rx="5" fill="#2C333D" stroke="#5A4B42"/>
+  <text x="918" y="367" fill="#F0D4CA" font-family="Arial" font-size="13">Primary action</text>
+  <rect x="1092" y="344" width="158" height="36" rx="5" fill="#20242A" stroke="#3A414B"/>
+  <text x="1134" y="367" fill="#B7C0CA" font-family="Arial" font-size="13">Secondary</text>
+  <rect x="848" y="410" width="470" height="82" rx="6" fill="#20242A" stroke="#303740"/>
+  <text x="872" y="440" fill="#D8DDE4" font-family="Arial" font-size="14" font-weight="700">Why this item is here</text>
+  <text x="872" y="466" fill="#AEB7C2" font-family="Arial" font-size="12">Classification, gate reason, priority, and suggested next step.</text>
+  <rect x="848" y="512" width="470" height="122" rx="6" fill="#20242A" stroke="#303740"/>
+  <text x="872" y="542" fill="#D8DDE4" font-family="Arial" font-size="14" font-weight="700">Detail body</text>
+  <text x="872" y="568" fill="#AEB7C2" font-family="Arial" font-size="12">Mail summary, thread context, report preview, or settings shortcut.</text>
+  <text x="848" y="692" fill="#77808A" font-family="Arial" font-size="12">Design role:</text>
+  <text x="848" y="718" fill="#AEB7C2" font-family="Arial" font-size="12">Keep queue clean while preserving detail depth.</text>
+</svg>

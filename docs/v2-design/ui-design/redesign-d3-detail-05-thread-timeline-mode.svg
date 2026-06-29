@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="900" viewBox="0 0 1120 900">
+  <rect width="1120" height="900" fill="#14161A"/>
+  <text x="58" y="56" fill="#D8DDE4" font-family="Arial" font-size="24" font-weight="700">D3 Component · Thread Timeline Mode</text>
+  <text x="58" y="86" fill="#8F98A3" font-family="Arial" font-size="14">Thread content belongs in the selected detail pane or a larger Webview Panel, not inside every list row.</text>
+
+  <rect x="58" y="124" width="360" height="718" rx="12" fill="#1E2228" stroke="#343A43"/>
+  <text x="86" y="164" fill="#D8DDE4" font-family="Arial" font-size="17" font-weight="700">Center queue: Threads</text>
+  <rect x="86" y="198" width="304" height="78" rx="7" fill="#242B34" stroke="#4A3B36"/>
+  <rect x="86" y="198" width="5" height="78" fill="#C59D5F"/>
+  <text x="110" y="228" fill="#F0D4CA" font-family="Arial" font-size="14" font-weight="700">Selected thread</text>
+  <text x="110" y="252" fill="#C9A89C" font-family="Arial" font-size="12">5 messages · needs reply</text>
+  <rect x="86" y="290" width="304" height="68" rx="7" fill="#20242A" stroke="#343A43"/>
+  <text x="110" y="328" fill="#D8DDE4" font-family="Arial" font-size="13">Long thread</text>
+  <rect x="86" y="372" width="304" height="68" rx="7" fill="#20242A" stroke="#343A43"/>
+  <text x="110" y="410" fill="#D8DDE4" font-family="Arial" font-size="13">Risk thread</text>
+  <rect x="86" y="454" width="304" height="68" rx="7" fill="#20242A" stroke="#343A43"/>
+  <text x="110" y="492" fill="#D8DDE4" font-family="Arial" font-size="13">Partial context thread</text>
+  <text x="86" y="594" fill="#77808A" font-family="Arial" font-size="12">Queue row stays compact.</text>
+  <text x="86" y="622" fill="#77808A" font-family="Arial" font-size="12">Timeline expands on the right.</text>
+
+  <rect x="450" y="124" width="612" height="718" rx="12" fill="#1E2228" stroke="#4A3B36"/>
+  <text x="482" y="164" fill="#F0D4CA" font-family="Arial" font-size="18" font-weight="700">Selected thread detail</text>
+  <text x="482" y="192" fill="#C9A89C" font-family="Arial" font-size="13">Participants · 5 messages · last updated today</text>
+  <rect x="482" y="224" width="132" height="34" rx="5" fill="#24303A"/>
+  <text x="510" y="246" fill="#D7DCE2" font-family="Arial" font-size="12">Analyze Thread</text>
+  <rect x="626" y="224" width="132" height="34" rx="5" fill="#2B6F88"/>
+  <text x="656" y="246" fill="#F4F8FB" font-family="Arial" font-size="12">Open Timeline</text>
+  <rect x="770" y="224" width="150" height="34" rx="5" fill="#20242A" stroke="#3A414B"/>
+  <text x="802" y="246" fill="#B7C0CA" font-family="Arial" font-size="12">Thread Report</text>
+
+  <rect x="482" y="288" width="534" height="92" rx="8" fill="#20242A" stroke="#303740"/>
+  <text x="510" y="320" fill="#D8DDE4" font-family="Arial" font-size="15" font-weight="700">Thread summary</text>
+  <text x="510" y="350" fill="#AEB7C2" font-family="Arial" font-size="13">Short summary of the thread state, unresolved question, owner, and next action.</text>
+
+  <rect x="482" y="404" width="534" height="332" rx="8" fill="#20242A" stroke="#303740"/>
+  <text x="510" y="438" fill="#D8DDE4" font-family="Arial" font-size="15" font-weight="700">Timeline preview</text>
+  <line x1="542" y1="472" x2="542" y2="686" stroke="#3A414B" stroke-width="2"/>
+  <circle cx="542" cy="488" r="7" fill="#C59D5F"/>
+  <text x="570" y="492" fill="#F0D4CA" font-family="Arial" font-size="13" font-weight="700">Initial request</text>
+  <text x="570" y="514" fill="#8F98A3" font-family="Arial" font-size="12">Sender · message 1 · today</text>
+  <circle cx="542" cy="560" r="7" fill="#6A8EA1"/>
+  <text x="570" y="564" fill="#D8DDE4" font-family="Arial" font-size="13" font-weight="700">Reply and clarification</text>
+  <text x="570" y="586" fill="#8F98A3" font-family="Arial" font-size="12">Participant · message 2-3</text>
+  <circle cx="542" cy="632" r="7" fill="#C59D5F"/>
+  <text x="570" y="636" fill="#F0D4CA" font-family="Arial" font-size="13" font-weight="700">Current unresolved action</text>
+  <text x="570" y="658" fill="#8F98A3" font-family="Arial" font-size="12">Needs reply · selected as active step</text>
+
+  <text x="482" y="790" fill="#77808A" font-family="Arial" font-size="12">Usage: show compact timeline preview here; open a full Webview Panel for very long threads.</text>
+</svg>

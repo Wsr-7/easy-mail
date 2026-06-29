@@ -12,11 +12,15 @@ test("composeAnalysisPrompt includes custom categories and language instruction"
   const prompt = composeAnalysisPrompt({
     basePrompt: "Base",
     outputSchemaPrompt: "Schema",
+    replyDraftPrompt: "Fill draftReplyParts.",
+    replyTemplate: "{{GREETING}}\n{{MAIN_MESSAGE}}\n{{REQUESTED_ACTION}}\n{{CLOSING}}",
     digestText: "Digest",
     outputLanguage: "zh-CN",
     promptConfig: config
   });
   assert.match(prompt, /vipCustomer/);
   assert.match(prompt, /Keep replies short/);
+  assert.match(prompt, /Fill draftReplyParts/);
+  assert.match(prompt, /{{GREETING}}/);
   assert.match(prompt, /Simplified Chinese/);
 });

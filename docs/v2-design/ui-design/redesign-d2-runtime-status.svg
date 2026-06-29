@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="220" viewBox="0 0 980 220">
+<rect width="980" height="220" fill="#15171B"/>
+<text x="24" y="34" fill="#8D96A0" font-family="Arial" font-size="12" font-weight="700">D2 / RUNTIME STATUS</text>
+<rect x="24" y="52" width="932" height="140" rx="8" fill="#1D2228" stroke="#343A43"/>
+<text x="48" y="84" fill="#D8DDE4" font-family="Arial" font-size="15" font-weight="700">Queue run state</text>
+<text x="48" y="110" fill="#AEB7C2" font-family="Arial" font-size="13">Idle. Ready to analyze 18 allowed items.</text>
+<rect x="48" y="134" width="150" height="30" rx="5" fill="#24303A"/><text x="72" y="154" fill="#D7DCE2" font-family="Arial" font-size="12">Analyze allowed</text>
+<rect x="218" y="134" width="142" height="30" rx="5" fill="#1B1F25" stroke="#303740"/><text x="242" y="154" fill="#9EA7B2" font-family="Arial" font-size="12">Analyze selected</text>
+<text x="650" y="86" fill="#8D96A0" font-family="Arial" font-size="11">LAST UPDATE</text><text x="650" y="108" fill="#D8DDE4" font-family="Arial" font-size="13">18:32</text>
+<text x="650" y="140" fill="#8D96A0" font-family="Arial" font-size="11">BATCH SIZE</text><text x="650" y="162" fill="#D8DDE4" font-family="Arial" font-size="13">5</text>
+</svg>

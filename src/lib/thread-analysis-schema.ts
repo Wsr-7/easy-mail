@@ -2,6 +2,7 @@ import { stripCodeFence, VALID_CATEGORIES, VALID_PRIORITIES, type Priority } fro
 
 export interface ThreadAnalysisResult {
   generatedAt: string;
+  language?: string;
   overview: ThreadAnalysisOverview;
   items: ThreadAnalysisItem[];
 }
@@ -70,6 +71,7 @@ export function normalizeThreadAnalysis(input: unknown, allowedCategories?: stri
 
   return {
     generatedAt: String(analysis.generatedAt || new Date().toISOString()),
+    language: String(analysis.language || ""),
     overview: normalizeOverview(analysis.overview, items),
     items
   };

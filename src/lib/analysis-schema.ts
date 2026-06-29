@@ -26,6 +26,13 @@ export interface AnalysisEvidence {
   reason: string;
 }
 
+export interface DraftReplyParts {
+  GREETING?: string;
+  MAIN_MESSAGE?: string;
+  REQUESTED_ACTION?: string;
+  CLOSING?: string;
+}
+
 export interface AnalysisItem {
   mailId: string;
   category: Category;
@@ -37,6 +44,7 @@ export interface AnalysisItem {
   reason: string;
   suggestedAction: string;
   draftReply: string;
+  draftReplyParts?: DraftReplyParts;
   confidence: number;
   needsOriginalMailCheck: boolean;
   source?: AnalysisSource;
@@ -53,6 +61,7 @@ export interface AnalysisOverview {
 
 export interface AnalysisResult {
   generatedAt: string;
+  language?: string;
   overview: AnalysisOverview;
   items: AnalysisItem[];
 }
@@ -76,6 +85,7 @@ export function normalizeAnalysis(input: unknown, allowedCategories?: string[]):
 
   return {
     generatedAt: String((analysis as Record<string, unknown>).generatedAt || new Date().toISOString()),
+    language: String((analysis as Record<string, unknown>).language || ""),
     overview: normalizeOverview((analysis as Record<string, unknown>).overview, items),
     items
   };
@@ -127,7 +137,28 @@ function normalizeItem(item: unknown, index: number, allowedCategories: Set<stri
     normalized.evidence = evidence;
   }
 
+  const draftReplyParts = normalizeDraftReplyParts((base as Record<string, unknown>).draftReplyParts);
+  if (draftReplyParts) {
+    normalized.draftReplyParts = draftReplyParts;
+  }
+
   return normalized;
+}
+
+function normalizeDraftReplyParts(input: unknown): DraftReplyParts | undefined {
+  if (!isObject(input)) {
+    return undefined;
+  }
+
+  const result: DraftReplyParts = {};
+  for (const key of ["GREETING", "MAIN_MESSAGE", "REQUESTED_ACTION", "CLOSING"] as const) {
+    const value = input[key];
+    if (value !== undefined && value !== null && String(value)) {
+      result[key] = String(value);
+    }
+  }
+
+  return Object.keys(result).length ? result : undefined;
 }
 
 function normalizeSource(source: unknown): AnalysisSource | undefined {

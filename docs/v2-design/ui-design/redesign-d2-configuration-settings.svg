@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="210" viewBox="0 0 980 210">
+<rect width="980" height="210" fill="#15171B"/>
+<text x="24" y="34" fill="#8D96A0" font-family="Arial" font-size="12" font-weight="700">D2 / SETTINGS</text>
+<rect x="24" y="52" width="932" height="126" rx="8" fill="#1B1F25" stroke="#303740"/>
+<text x="48" y="84" fill="#D8DDE4" font-family="Arial" font-size="15" font-weight="700">Settings</text>
+<text x="48" y="108" fill="#8D96A0" font-family="Arial" font-size="12">Quiet row. Expanded only when editing.</text>
+<rect x="48" y="132" width="150" height="30" rx="5" fill="#20242A" stroke="#343A43"/><text x="66" y="152" fill="#AEB7C2" font-family="Arial" font-size="12">Range 24h</text>
+<rect x="208" y="132" width="160" height="30" rx="5" fill="#20242A" stroke="#343A43"/><text x="226" y="152" fill="#AEB7C2" font-family="Arial" font-size="12">Inbox; Alerts</text>
+<rect x="378" y="132" width="180" height="30" rx="5" fill="#20242A" stroke="#343A43"/><text x="396" y="152" fill="#AEB7C2" font-family="Arial" font-size="12">Auto max level 2</text>
+<rect x="780" y="132" width="118" height="30" rx="5" fill="#1D2026" stroke="#3A414B"/><text x="806" y="152" fill="#AAB3BD" font-family="Arial" font-size="12">Open</text>
+</svg>

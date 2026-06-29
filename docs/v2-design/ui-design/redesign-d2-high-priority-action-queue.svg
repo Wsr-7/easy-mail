@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="260" viewBox="0 0 980 260">
+<rect width="980" height="260" fill="#15171B"/>
+<text x="24" y="34" fill="#8D96A0" font-family="Arial" font-size="12" font-weight="700">D2 / PRIORITY LANE</text>
+<rect x="24" y="52" width="932" height="180" rx="8" fill="#1F2329" stroke="#4A3B36"/>
+<text x="48" y="84" fill="#F0D4CA" font-family="Arial" font-size="15" font-weight="700">Attention lane</text>
+<text x="900" y="84" fill="#C9A89C" font-family="Arial" font-size="12" text-anchor="end">ordered by urgency</text>
+<rect x="48" y="104" width="884" height="44" rx="4" fill="#24272E" stroke="#4A3B36"/>
+<rect x="48" y="104" width="5" height="44" fill="#C59D5F"/>
+<text x="66" y="131" fill="#F1F4F7" font-family="Arial" font-size="13" font-weight="700">P0 / Reply needed</text>
+<text x="330" y="131" fill="#C9A89C" font-family="Arial" font-size="12">Need reply / thread / 10:40</text>
+<rect x="790" y="113" width="112" height="26" rx="4" fill="#2B6F88"/><text x="813" y="131" fill="#F4F8FB" font-family="Arial" font-size="11">Use draft</text>
+<rect x="48" y="156" width="884" height="44" rx="4" fill="#24272E" stroke="#3A414B"/>
+<rect x="48" y="156" width="5" height="44" fill="#6A8EA1"/>
+<text x="66" y="183" fill="#F1F4F7" font-family="Arial" font-size="13" font-weight="700">P1 / Follow-up needed</text>
+<text x="330" y="183" fill="#8D96A0" font-family="Arial" font-size="12">Waiting / 08:18</text>
+<rect x="790" y="165" width="112" height="26" rx="4" fill="#24303A"/><text x="815" y="183" fill="#D8DDE4" font-family="Arial" font-size="11">Open item</text>
+</svg>

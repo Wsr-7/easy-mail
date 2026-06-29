@@ -10,6 +10,7 @@ test("mergeDigestIntoStore adds new mail and skips duplicates by stable id", () 
         mailId: "mail-001",
         internetMessageId: "<mail-001@example.com>",
         entryId: "entry-001",
+        storeId: "store-001",
         conversationId: "conv-001",
         conversationIndex: "01ABCDEF",
         subject: "Contract approval needed",
@@ -39,6 +40,7 @@ test("mergeDigestIntoStore adds new mail and skips duplicates by stable id", () 
   assert.equal(second.skipped, 1);
   assert.equal(second.store.items.length, 1);
   assert.equal(second.store.items[0].mailId, "internet:<mail-001@example.com>");
+  assert.equal(second.store.items[0].storeId, "store-001");
   assert.equal(second.store.items[0].conversationId, "conv-001");
   assert.equal(second.store.items[0].conversationIndex, "01ABCDEF");
   assert.equal(second.store.items[0].senderName, "Alice");
@@ -76,6 +78,7 @@ test("normalizeMailStore fills thread fields for old store json", () => {
 
   assert.equal(store.items.length, 1);
   assert.equal(store.items[0].conversationId, "");
+  assert.equal(store.items[0].storeId, "");
   assert.equal(store.items[0].conversationIndex, "");
   assert.equal(store.items[0].senderName, "");
   assert.equal(store.items[0].senderEmail, "");

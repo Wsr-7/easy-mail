@@ -94,6 +94,8 @@ export function allowedCategoryIds(config: PromptConfig): string[] {
 export function composeAnalysisPrompt(input: {
   basePrompt: string;
   outputSchemaPrompt: string;
+  replyDraftPrompt?: string;
+  replyTemplate?: string;
   digestText: string;
   outputLanguage: string;
   promptConfig: PromptConfig;
@@ -109,6 +111,8 @@ export function composeAnalysisPrompt(input: {
     renderImportantSenders(input.promptConfig.importantSenders),
     "Reply draft instruction:",
     input.promptConfig.replyDraftInstruction,
+    input.replyDraftPrompt?.trim(),
+    input.replyTemplate ? `Reply draft template:\n${input.replyTemplate.trim()}` : "",
     input.outputSchemaPrompt.trim(),
     "Output language instruction:",
     languageInstruction,
