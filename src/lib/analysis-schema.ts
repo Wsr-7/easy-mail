@@ -215,3 +215,34 @@ function numberOr(value: unknown, fallback: number): number {
 function isObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object";
 }
+
+export function mergeAnalysisResults(current: AnalysisResult, next: AnalysisResult, allowedCategories?: string[]): AnalysisResult {
+  const byId = new Map<string, AnalysisResult["items"][number]>();
+  for (const item of current.items || []) {
+    byId.set(item.mailId, item);
+  }
+  for (const item of next.items || []) {
+    byId.set(item.mailId, item);
+  }
+  const items = [...byId.values()];
+  return normalizeAnalysis({
+    generatedAt: new Date().toISOString(),
+    language: next.language || current.language || "",
+    overview: {},
+    items
+  }, allowedCategories);
+}
+
+export function pruneAnalysisResult(analysis: AnalysisResult, retentionDays: number, allowedCategories?: string[], now: Date = new Date()): AnalysisResult {
+  if (!Number.isFinite(retentionDays) || retentionDays <= 0) {
+    return analysis;
+  }
+  const cutoff = now.getTime() - retentionDays * 24 * 60 * 60 * 1000;
+  return normalizeAnalysis({
+    ...analysis,
+    items: analysis.items.filter((item) => {
+      const received = Date.parse(String(item.receivedTime || "").replace(" ", "T"));
+      return !Number.isFinite(received) || received >= cutoff;
+    })
+  }, allowedCategories);
+}

@@ -1,4 +1,4 @@
-import type { MailClassification } from "./classification";
+import { classificationFor, type ClassificationCache, type MailClassification } from "./classification";
 import type { StoredMail } from "./mail-store";
 import type { ThreadRecord, ThreadSecuritySummary } from "./thread-schema";
 import type {
@@ -245,4 +245,31 @@ function defaultClassification(mailId: string): MailClassification {
 
 function unique<T>(values: T[]): T[] {
   return [...new Set(values)];
+}
+
+export function buildMailSecurityDecisionMap(
+  mails: StoredMail[],
+  classifications: ClassificationCache,
+  settings: SecurityGateSettings
+): Map<string, SecurityGateDecisionResult> {
+  const decisions = new Map<string, SecurityGateDecisionResult>();
+  for (const mail of mails) {
+    decisions.set(mail.mailId, buildMailGateDecision(mail, classificationFor(mail.mailId, classifications) || defaultClassification(mail.mailId), settings));
+  }
+  return decisions;
+}
+
+export function canAnalyzeMail(mail: StoredMail, decisions: Map<string, SecurityGateDecisionResult>, explicitSelection: boolean): boolean {
+  const decision = decisions.get(mail.mailId);
+  if (!decision) {
+    return true;
+  }
+  if (decision.decision === "block") {
+    return false;
+  }
+  return explicitSelection || decision.decision === "allow";
+}
+
+export function fallbackClassification(mailId: string): MailClassification {
+  return defaultClassification(mailId);
 }
