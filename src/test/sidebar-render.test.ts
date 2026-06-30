@@ -1,0 +1,251 @@
+import { describe, it } from "node:test";
+import assert from "node:assert/strict";
+import { renderSidebarHtml } from "../lib/sidebar-render";
+import { normalizeClassificationCache } from "../lib/classification";
+import { normalizePromptConfig } from "../lib/prompt-config";
+import { emptyMailStore, emptyMailIndex, type StoredMail } from "../lib/mail-store";
+import { emptyThreadStore } from "../lib/thread-store";
+import type { DashboardRenderInput } from "../lib/dashboard-render";
+import type { DashboardState } from "../lib/dashboard-state";
+import type { AnalysisItem } from "../lib/analysis-schema";
+
+function stubMail(overrides?: Partial<StoredMail>): StoredMail {
+  return {
+    mailId: "m1", sourceMailId: "", internetMessageId: "", entryId: "", subject: "Test",
+    from: "test@test.com", receivedTime: "2024-01-01", folder: "Inbox",
+    unread: "True", importance: "Normal", toMe: "True", ccMe: "False",
+    bodyExcerpt: "", pulledAt: "2024-01-01",
+    ...overrides
+  };
+}
+
+function stubAnalysisItem(overrides?: Partial<AnalysisItem>): AnalysisItem {
+  return {
+    mailId: "a1", category: "mustHandleToday", priority: "P0", subject: "Urgent",
+    sender: "ceo@test.com", receivedTime: "2024-01-01", summary: "Do this",
+    reason: "CEO", suggestedAction: "Reply", draftReply: "", confidence: 0.9,
+    needsOriginalMailCheck: false,
+    ...overrides
+  };
+}
+
+function stubState(configOverrides?: Record<string, unknown>, categories?: DashboardState["categories"]): DashboardState {
+  return {
+    config: { rangeMode: "recentHours", recentHours: 24, outputLanguage: "en-US", ...configOverrides },
+    digestMetadata: { generatedAt: "", rangeMode: "", recentHours: 0, maxItems: 0, folders: [] },
+    overview: { totalMails: 0, mustHandleToday: 0, risks: 0, waitingForMe: 0, notices: 0 },
+    categories: categories || []
+  };
+}
+
+function stubInput(overrides?: Partial<DashboardRenderInput>): DashboardRenderInput {
+  return {
+    state: stubState(),
+    store: emptyMailStore(),
+    index: emptyMailIndex(),
+    queue: { pending: [], blocked: [], analysed: [], allowed: [] },
+    classifications: normalizeClassificationCache({}),
+    securityDecisions: new Map(),
+    promptConfig: normalizePromptConfig({}),
+    threadStore: emptyThreadStore(),
+    threadAnalysis: { generatedAt: "", overview: { totalThreads: 0, mustHandleToday: 0, risks: 0, waitingForMe: 0, notices: 0 }, items: [] },
+    availableModels: [],
+    busyKind: "",
+    isBusy: false,
+    ...overrides
+  };
+}
+
+describe("renderSidebarHtml", () => {
+  it("returns valid HTML document", () => {
+    const html = renderSidebarHtml(stubInput());
+    assert.ok(html.includes("<!doctype html>"));
+    assert.ok(html.includes("</html>"));
+  });
+
+  it("uses VS Code CSS variables", () => {
+    const html = renderSidebarHtml(stubInput());
+    assert.ok(html.includes("--vscode-sideBar-background"));
+    assert.ok(html.includes("--vscode-button-background"));
+    assert.ok(html.includes("--vscode-badge-background"));
+  });
+
+  it("renders action buttons", () => {
+    const html = renderSidebarHtml(stubInput());
+    assert.ok(html.includes("post('pullMail')"));
+    assert.ok(html.includes("post('analyze')"));
+  });
+
+  it("disables buttons when busy", () => {
+    const html = renderSidebarHtml(stubInput({ isBusy: true, busyKind: "pullMail" }));
+    assert.ok(html.includes("disabled"));
+    assert.ok(html.includes("button-spinner"));
+  });
+
+  it("renders queue navigation for pending items", () => {
+    const input = stubInput({
+      queue: { pending: [stubMail()], blocked: [], analysed: [], allowed: [] }
+    });
+    const html = renderSidebarHtml(input);
+    assert.ok(html.includes('data-queue-id="pending"'));
+  });
+
+  it("renders mail rows with data-queue attributes", () => {
+    const input = stubInput({
+      queue: { pending: [stubMail({ mailId: "m1", from: "bob@test.com", subject: "Hello" })], blocked: [], analysed: [], allowed: [] }
+    });
+    const html = renderSidebarHtml(input);
+    assert.ok(html.includes('data-queue="pending"'));
+    assert.ok(html.includes("Hello"));
+    assert.ok(html.includes("bob@test.com"));
+  });
+
+  it("renders blocked items with reason", () => {
+    const input = stubInput({
+      queue: { pending: [], blocked: [stubMail({ mailId: "b1", subject: "Classified" })], analysed: [], allowed: [] },
+      securityDecisions: new Map([["b1", { decision: "block", reasons: ["HIGH classification"] } as any]])
+    });
+    const html = renderSidebarHtml(input);
+    assert.ok(html.includes('data-queue="blocked"'));
+    assert.ok(html.includes("Classified"));
+  });
+
+  it("renders analyzed items in category queues", () => {
+    const input = stubInput({
+      state: stubState({}, [
+        { id: "mustHandleToday", items: [stubAnalysisItem({ subject: "Urgent task" })] },
+        { id: "notice", items: [] }
+      ])
+    });
+    const html = renderSidebarHtml(input);
+    assert.ok(html.includes('data-queue="mustHandleToday"'));
+    assert.ok(html.includes("Urgent task"));
+  });
+
+  it("renders thread rows", () => {
+    const input = stubInput({
+      threadStore: {
+        generatedAt: "", lastBuiltAt: "",
+        items: [{
+          threadId: "t1", conversationId: "c1", normalizedSubject: "thread subject",
+          subject: "Thread Subject",
+          participants: ["alice@test.com", "bob@test.com"],
+          folders: ["Inbox"], startTime: "2024-01-01", lastTime: "2024-01-02",
+          messageCount: 3, unreadCount: 0, hasAttachments: false,
+          sourceMailIds: ["m1", "m2", "m3"], timeline: [],
+          contentStatus: "available",
+          security: { totalMessages: 3, allowedMessages: 3, manualConfirmMessages: 0, blockedMessages: 0, highestClassificationLevel: 0, partialContext: false, reasons: [] }
+        }]
+      }
+    });
+    const html = renderSidebarHtml(input);
+    assert.ok(html.includes('data-queue="threads"'));
+    assert.ok(html.includes("Thread Subject"));
+    assert.ok(html.includes("alice@test.com"));
+  });
+
+  it("renders bottom bar with reports and settings", () => {
+    const html = renderSidebarHtml(stubInput());
+    assert.ok(html.includes("post('generateReports')"));
+    assert.ok(html.includes("toggleSettings"));
+    assert.ok(html.includes("confirmClear"));
+  });
+
+  it("includes queue filter JavaScript", () => {
+    const html = renderSidebarHtml(stubInput());
+    assert.ok(html.includes("showQueue"));
+    assert.ok(html.includes("applyQueue"));
+    assert.ok(html.includes("toggleRow"));
+  });
+
+  it("renders settings panel hidden by default", () => {
+    const html = renderSidebarHtml(stubInput());
+    assert.ok(html.includes('id="settingsPanel"'));
+    assert.ok(html.includes("hidden"));
+  });
+
+  it("renders language globe icon with dropdown", () => {
+    const html = renderSidebarHtml(stubInput());
+    assert.ok(html.includes("toggleLangMenu"));
+    assert.ok(html.includes('id="langToggle"'));
+    assert.ok(html.includes('id="langDropdown"'));
+    assert.ok(html.includes("sb-lang-dropdown"));
+    assert.ok(html.includes("English"));
+    assert.ok(html.includes("中文"));
+  });
+
+  it("marks active language in dropdown", () => {
+    const inputEn = stubInput({ state: stubState({ outputLanguage: "en-US" }) });
+    const htmlEn = renderSidebarHtml(inputEn);
+    assert.ok(htmlEn.includes('setLanguage(\'en-US\')'));
+
+    const inputZh = stubInput({ state: stubState({ outputLanguage: "zh-CN" }) });
+    const htmlZh = renderSidebarHtml(inputZh);
+    assert.ok(htmlZh.includes('setLanguage(\'zh-CN\')'));
+  });
+
+  it("renders empty state element", () => {
+    const html = renderSidebarHtml(stubInput());
+    assert.ok(html.includes('id="emptyState"'));
+  });
+
+  it("includes config auto-save debounce script", () => {
+    const html = renderSidebarHtml(stubInput());
+    assert.ok(html.includes("debounce"));
+    assert.ok(html.includes("saveConfig"));
+    assert.ok(html.includes("autoSave"));
+  });
+
+  it("renders restore button for ignored items instead of ignore", () => {
+    const input = stubInput({
+      state: stubState({}, [
+        { id: "ignored", items: [stubAnalysisItem({ mailId: "ig1", subject: "Old mail" })] },
+        { id: "mustHandleToday", items: [] }
+      ])
+    });
+    const html = renderSidebarHtml(input);
+    assert.ok(html.includes('data-action="unignore"'));
+    assert.ok(html.includes('data-mail-id="ig1"'));
+  });
+
+  it("renders batch size selector in action bar", () => {
+    const html = renderSidebarHtml(stubInput());
+    assert.ok(html.includes('id="batchSelect"'));
+    assert.ok(html.includes("runAnalyze"));
+    assert.ok(html.includes('<option value="5"'));
+    assert.ok(html.includes('<option value="10"'));
+    assert.ok(html.includes('<option value="20"'));
+    assert.ok(html.includes('<option value="all"'));
+  });
+
+  it("selects current batch size in dropdown", () => {
+    const input = stubInput({ state: stubState({ analysisBatchSize: 10 }) });
+    const html = renderSidebarHtml(input);
+    assert.ok(html.includes('<option value="10" selected'));
+  });
+
+  it("shows all stable queues even when empty", () => {
+    const html = renderSidebarHtml(stubInput());
+    assert.ok(html.includes('data-queue-id="pending"'));
+    assert.ok(html.includes('data-queue-id="mustHandleToday"'));
+    assert.ok(html.includes('data-queue-id="risk"'));
+    assert.ok(html.includes('data-queue-id="ignored"'));
+  });
+
+  it("dims empty queues with sb-queue-dim class", () => {
+    const html = renderSidebarHtml(stubInput());
+    assert.ok(html.includes("sb-queue-dim"));
+  });
+
+  it("renders separator between pending/blocked and analysis categories", () => {
+    const html = renderSidebarHtml(stubInput());
+    assert.ok(html.includes("sb-queue-separator"));
+  });
+
+  it("places pending queue first in navigation", () => {
+    const html = renderSidebarHtml(stubInput());
+    const pendingIdx = html.indexOf('data-queue-id="pending"');
+    const mustHandleIdx = html.indexOf('data-queue-id="mustHandleToday"');
+    assert.ok(pendingIdx < mustHandleIdx, "pending should come before mustHandleToday");
+  });
+});
