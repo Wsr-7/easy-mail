@@ -301,7 +301,7 @@ export interface DashboardRenderInput {
   state: DashboardState;
   store: MailStore;
   index: MailIndex;
-  queue: { pending: StoredMail[]; blocked: StoredMail[]; analysed: StoredMail[]; allowed: StoredMail[] };
+  queue: { pending: StoredMail[]; blocked: StoredMail[]; analysed: StoredMail[]; allowed: StoredMail[]; ignoredPending?: StoredMail[] };
   classifications: ClassificationCache;
   securityDecisions: SecurityDecisionMap;
   promptConfig: PromptConfig;

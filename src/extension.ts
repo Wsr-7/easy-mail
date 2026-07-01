@@ -589,6 +589,7 @@ class EasyMailApp {
     await this.data.writeMailIndex(emptyMailIndex());
     await this.data.writeThreadStore(emptyThreadStore());
     await this.data.writeClassificationCache(normalizeClassificationCache({}));
+    await this.data.writeIgnoredIds([]);
     await fs.promises.writeFile(this.data.getAnalysisPath(), `${JSON.stringify({ generatedAt: "", overview: { totalMails: 0, mustHandleToday: 0, risks: 0, waitingForMe: 0, notices: 0 }, items: [] }, null, 2)}\n`, "utf8");
     await this.data.writeThreadAnalysisResult({ generatedAt: "", overview: { totalThreads: 0, mustHandleToday: 0, risks: 0, waitingForMe: 0, notices: 0 }, items: [] });
     await deleteFileIfExists(this.data.getDailyBriefPath());
@@ -820,6 +821,10 @@ class EasyMailApp {
       copyToClipboard: async (text) => { await vscode.env.clipboard.writeText(text); },
       showInfo: (msg) => void vscode.window.showInformationMessage(msg),
       showWarning: (msg) => void vscode.window.showWarningMessage(msg),
+      showConfirm: async (msg, yesLabel) => {
+        const result = await vscode.window.showWarningMessage(msg, { modal: true }, yesLabel);
+        return result === yesLabel;
+      },
       readIgnoredIds: () => this.data.readIgnoredIds(),
       writeIgnoredIds: (ids) => this.data.writeIgnoredIds(ids),
       openMailInOutlook: (mailId) => this.openMailInOutlook(mailId),

@@ -43,7 +43,7 @@ function stubInput(overrides?: Partial<DashboardRenderInput>): DashboardRenderIn
     state: stubState(),
     store: emptyMailStore(),
     index: emptyMailIndex(),
-    queue: { pending: [], blocked: [], analysed: [], allowed: [] },
+    queue: { pending: [], blocked: [], analysed: [], allowed: [], ignoredPending: [] },
     classifications: normalizeClassificationCache({}),
     securityDecisions: new Map(),
     promptConfig: normalizePromptConfig({}),
@@ -84,7 +84,7 @@ describe("renderSidebarHtml", () => {
 
   it("renders queue navigation for pending items", () => {
     const input = stubInput({
-      queue: { pending: [stubMail()], blocked: [], analysed: [], allowed: [] }
+      queue: { pending: [stubMail()], blocked: [], analysed: [], allowed: [], ignoredPending: [] }
     });
     const html = renderSidebarHtml(input);
     assert.ok(html.includes('data-queue-id="pending"'));
@@ -92,7 +92,7 @@ describe("renderSidebarHtml", () => {
 
   it("renders mail rows with data-queue attributes", () => {
     const input = stubInput({
-      queue: { pending: [stubMail({ mailId: "m1", from: "bob@test.com", subject: "Hello" })], blocked: [], analysed: [], allowed: [] }
+      queue: { pending: [stubMail({ mailId: "m1", from: "bob@test.com", subject: "Hello" })], blocked: [], analysed: [], allowed: [], ignoredPending: [] }
     });
     const html = renderSidebarHtml(input);
     assert.ok(html.includes('data-queue="pending"'));
@@ -102,7 +102,7 @@ describe("renderSidebarHtml", () => {
 
   it("renders blocked items with reason", () => {
     const input = stubInput({
-      queue: { pending: [], blocked: [stubMail({ mailId: "b1", subject: "Classified" })], analysed: [], allowed: [] },
+      queue: { pending: [], blocked: [stubMail({ mailId: "b1", subject: "Classified" })], analysed: [], allowed: [], ignoredPending: [] },
       securityDecisions: new Map([["b1", { decision: "block", reasons: ["HIGH classification"] } as any]])
     });
     const html = renderSidebarHtml(input);

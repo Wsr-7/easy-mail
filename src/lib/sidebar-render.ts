@@ -158,7 +158,7 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
   const visibleThreadStore = filterVisibleThreadsForDashboard(threadStore);
   const threadAnalysis = input.threadAnalysis || { generatedAt: "", overview: { totalThreads: 0, mustHandleToday: 0, risks: 0, waitingForMe: 0, notices: 0 }, items: [] };
   const threadByMailId = buildThreadLookup(visibleThreadStore);
-  const queue = input.queue || { pending: [], blocked: [], analysed: [], allowed: [] };
+  const queue = input.queue || { pending: [], blocked: [], analysed: [], allowed: [], ignoredPending: [] };
   const classifications = input.classifications || normalizeClassificationCache({});
   const securityDecisions = input.securityDecisions || new Map<string, SecurityGateDecisionResult>();
   const configuredModel = String(config.modelFamily || "");
@@ -181,6 +181,7 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
   queueCounts["pending"] = queue.pending.length;
   queueCounts["blocked"] = queue.blocked.length;
   queueCounts["threads"] = visibleThreadStore.items.length;
+  queueCounts["ignored"] = (queueCounts["ignored"] || 0) + (queue.ignoredPending?.length || 0);
 
   const activeQueues = QUEUE_ORDER.filter((q) => (queueCounts[q] || 0) > 0);
   const defaultQueue = activeQueues[0] || "pending";
@@ -216,6 +217,10 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
   const analysisRows = state.categories.map((cat) =>
     cat.items.map((item) => renderSidebarAnalysisRow(item, cat.id, labels, threadByMailId)).join("")
   ).join("");
+
+  const ignoredPendingRows = (queue.ignoredPending || []).map((item) => {
+    return renderSidebarMailRow(item, "ignored", labels, "");
+  }).join("");
 
   const threadRows = [...(visibleThreadStore.items || [])].sort((a, b) =>
     String(b.lastTime || "").localeCompare(String(a.lastTime || ""))
@@ -298,37 +303,48 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
   }
   .sb-primary {
     flex: 1; min-width: 0;
-    padding: 4px 8px;
+    padding: 5px 10px;
     background: var(--vscode-button-secondaryBackground, #3a3d41);
     color: var(--vscode-button-secondaryForeground, #fff);
-    border-radius: 3px;
+    border-radius: 4px;
     display: inline-flex; align-items: center; justify-content: center; gap: 5px;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    font-size: 12px;
-    border: 1px solid var(--vscode-contrastBorder, rgba(128,128,128,0.2));
+    font-size: 12px; font-weight: 500;
+    border: 1px solid rgba(255,255,255,0.06);
+    transition: background 0.15s, transform 0.1s;
   }
   .sb-primary:hover:not(:disabled) { background: var(--vscode-button-secondaryHoverBackground, #45494e); }
-  .sb-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .sb-primary:active:not(:disabled) { transform: scale(0.97); }
+  .sb-primary:disabled { opacity: 0.35; cursor: not-allowed; }
   .sb-secondary {
-    padding: 4px 6px;
+    padding: 5px 8px;
     background: var(--vscode-button-secondaryBackground, #3a3d41);
     color: var(--vscode-button-secondaryForeground, #fff);
-    border-radius: 3px; font-size: 12px;
-    border: 1px solid var(--vscode-contrastBorder, rgba(128,128,128,0.2));
+    border-radius: 4px; font-size: 12px;
+    border: 1px solid rgba(255,255,255,0.06);
+    transition: background 0.15s, transform 0.1s;
   }
   .sb-secondary:hover:not(:disabled) { background: var(--vscode-button-secondaryHoverBackground, #45494e); }
-  .sb-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .sb-secondary:active:not(:disabled) { transform: scale(0.95); }
+  .sb-secondary:disabled { opacity: 0.35; cursor: not-allowed; }
   .sb-analyze-group { display: inline-flex; flex: 1; min-width: 0; }
-  .sb-analyze-group .sb-primary { border-radius: 3px 0 0 3px; flex: 1; border-right: none; }
+  .sb-analyze-group .sb-primary { border-radius: 4px 0 0 4px; flex: 1; border-right: none; }
   .sb-batch-select {
-    width: 42px; padding: 3px 1px; border: 1px solid var(--vscode-contrastBorder, rgba(128,128,128,0.2)); border-left: none;
-    border-radius: 0 3px 3px 0;
-    background: var(--vscode-button-secondaryBackground, #3a3d41);
-    color: var(--vscode-button-secondaryForeground, #fff);
+    width: 42px; padding: 4px 2px;
+    border: 1px solid rgba(255,255,255,0.06); border-left: 1px solid rgba(255,255,255,0.08);
+    border-radius: 0 4px 4px 0;
+    background: var(--vscode-input-background, #3c3c3c);
+    color: var(--vscode-input-foreground, #ccc);
     font-size: 11px; cursor: pointer; text-align: center;
+    -webkit-appearance: none; -moz-appearance: none; appearance: none;
   }
-  .sb-batch-select:disabled { opacity: 0.4; cursor: not-allowed; }
+  .sb-batch-select:disabled { opacity: 0.35; cursor: not-allowed; }
   .sb-batch-select:hover:not(:disabled) { background: var(--vscode-button-secondaryHoverBackground, #45494e); }
+  .sb-batch-select:focus { outline: 1px solid var(--vscode-focusBorder, #007fd4); }
+  .sb-model-hint {
+    font-size: 10px; color: var(--vscode-editorWarning-foreground, #cca700);
+    padding: 2px 10px 0; display: flex; align-items: center; gap: 4px;
+  }
   .button-spinner { width: 10px; height: 10px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -385,10 +401,20 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
   .sb-field { padding: 2px 0; line-height: 1.4; }
   .sb-blocked-reason { color: var(--vscode-errorForeground, #f48771); }
   .sb-actions { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
-  .sb-btn { padding: 4px 10px; border-radius: 4px; font-size: 11px; background: var(--vscode-button-background, #0e639c); color: var(--vscode-button-foreground, #fff); display: inline-flex; align-items: center; gap: 6px; }
+  .sb-btn {
+    padding: 4px 10px; border-radius: 4px; font-size: 11px;
+    background: var(--vscode-button-background, #0e639c); color: var(--vscode-button-foreground, #fff);
+    display: inline-flex; align-items: center; gap: 6px;
+    border: none; transition: background 0.15s, transform 0.1s;
+  }
   .sb-btn:hover:not(:disabled) { background: var(--vscode-button-hoverBackground, #1177bb); }
-  .sb-btn:disabled { opacity: 0.45; cursor: not-allowed; }
-  .sb-btn.ghost { background: var(--vscode-button-secondaryBackground, #3a3d41); color: var(--vscode-button-secondaryForeground, #fff); }
+  .sb-btn:active:not(:disabled) { transform: scale(0.96); }
+  .sb-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .sb-btn.ghost {
+    background: transparent; color: var(--vscode-sideBar-foreground, var(--vscode-foreground, #ccc));
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .sb-btn.ghost:hover:not(:disabled) { background: var(--vscode-list-hoverBackground, rgba(255,255,255,0.08)); }
   .sb-btn.is-busy { gap: 6px; }
   .sb-list { margin: 2px 0 2px 16px; padding: 0; list-style: disc; }
   .sb-list li { padding: 1px 0; }
@@ -421,21 +447,23 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
   .sb-bottom-row { display: flex; gap: 4px; flex-wrap: wrap; padding: 2px 0; }
   .sb-bottom-btn {
     padding: 4px 10px; font-size: 11px; border-radius: 4px;
-    background: var(--vscode-button-secondaryBackground, #3a3d41);
-    color: var(--vscode-button-secondaryForeground, #fff);
-    border: 1px solid var(--vscode-contrastBorder, rgba(128,128,128,0.25));
+    background: transparent;
+    color: var(--vscode-sideBar-foreground, var(--vscode-foreground, #ccc));
+    border: 1px solid rgba(255,255,255,0.08);
+    transition: background 0.15s, transform 0.1s;
   }
-  .sb-bottom-btn:hover { background: var(--vscode-button-secondaryHoverBackground, #45494e); }
-  .sb-bottom-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .sb-bottom-btn:hover { background: var(--vscode-list-hoverBackground, rgba(255,255,255,0.08)); }
+  .sb-bottom-btn:active { transform: scale(0.96); }
+  .sb-bottom-btn:disabled { opacity: 0.35; cursor: not-allowed; }
   .sb-bottom-btn.wb-open {
     display: inline-flex; align-items: center; gap: 5px;
     background: var(--vscode-button-background, #0e639c);
     color: var(--vscode-button-foreground, #fff);
-    border-color: var(--vscode-button-background, #0e639c);
+    border-color: transparent; font-weight: 500;
   }
   .sb-bottom-btn.wb-open:hover { background: var(--vscode-button-hoverBackground, #1177bb); }
-  .sb-bottom-btn.danger { color: var(--vscode-errorForeground, #f48771); }
-  .sb-bottom-btn.danger:hover { background: rgba(244,135,113,0.15); }
+  .sb-bottom-btn.danger { color: var(--vscode-errorForeground, #f48771); border-color: rgba(244,135,113,0.15); }
+  .sb-bottom-btn.danger:hover { background: rgba(244,135,113,0.12); }
 
   /* ── Settings panel (inside bottom) ── */
   .sb-settings { padding: 0 4px; }
@@ -443,12 +471,33 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
   .sb-settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 8px 0; }
   .sb-settings label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; opacity: 0.8; }
   .sb-settings input, .sb-settings select {
-    padding: 4px 6px; border-radius: 4px; font-size: 12px;
+    padding: 5px 8px; border-radius: 4px; font-size: 12px;
     background: var(--vscode-input-background, #3c3c3c);
     color: var(--vscode-input-foreground, #ccc);
-    border: 1px solid var(--vscode-input-border, #3c3c3c);
+    border: 1px solid var(--vscode-input-border, rgba(255,255,255,0.08));
+    -webkit-appearance: none; -moz-appearance: none; appearance: none;
+    transition: border-color 0.15s;
   }
-  .sb-settings input:focus, .sb-settings select:focus { outline: 1px solid var(--vscode-focusBorder, #007fd4); }
+  .sb-settings input:focus, .sb-settings select:focus {
+    outline: none;
+    border-color: var(--vscode-focusBorder, #007fd4);
+    box-shadow: 0 0 0 1px var(--vscode-focusBorder, #007fd4);
+  }
+  .sb-settings select {
+    padding-right: 22px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='%23999'%3E%3Cpath d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 6px center;
+    background-size: 10px 6px;
+    cursor: pointer;
+  }
+  .sb-settings input[type="number"] {
+    -moz-appearance: textfield;
+  }
+  .sb-settings input[type="number"]::-webkit-outer-spin-button,
+  .sb-settings input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none; margin: 0;
+  }
 </style>
 </head>
 <body>
@@ -488,6 +537,7 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
       <button class="sb-secondary" onclick="post('loadMore')"${!hasHistoryAnchors ? " disabled" : busyDisabled} title="${escapeAttr(labels.toolbar.loadMore)}">+</button>
       <button class="sb-secondary" onclick="post('refresh')"${busyDisabled} title="${escapeAttr(labels.toolbar.refresh)}">↻</button>
     </div>
+    ${!canAnalyze ? `<div class="sb-model-hint"><svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12"><path d="M7.5 1a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM6.3 11c0-.5.4-.9.9-.9s.9.4.9.9-.4.9-.9.9-.9-.4-.9-.9zM6.5 4h2v5h-2V4z"/></svg>${escapeHtml(locale === "zh-CN" ? "请先在下方设置中加载模型" : "Load models in settings below to analyze")}</div>` : ""}
   </div>
 
   <!-- ═══ Scrollable middle ═══ -->
@@ -499,6 +549,7 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
       ${pendingRows}
       ${blockedRows}
       ${analysisRows}
+      ${ignoredPendingRows}
       ${threadRows}
       <div class="sb-empty" id="emptyState">${escapeHtml(labels.card.noItems)}</div>
     </div>
@@ -636,8 +687,7 @@ function saveConfig(keepSettingsOpen, silent) {
 }
 
 function confirmClear() {
-  var msg = '${escapeAttr(locale === "zh-CN" ? "确定要清空所有邮件和分析数据吗？此操作不可撤销。" : "Clear all mail and analysis data? This cannot be undone.")}';
-  if (confirm(msg)) { post('clearLocalCache'); }
+  post('confirmClearLocalCache');
 }
 
 function debounce(fn, wait) { var timer; return function() { clearTimeout(timer); timer = setTimeout(fn, wait); }; }

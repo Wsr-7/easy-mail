@@ -20,6 +20,7 @@ export interface AnalysisQueueState {
   blocked: StoredMail[];
   analysed: StoredMail[];
   allowed: StoredMail[];
+  ignoredPending: StoredMail[];
 }
 
 export function normalizeClassificationCache(input: unknown): ClassificationCache {
@@ -79,7 +80,8 @@ export function buildQueueState(
   });
   const blocked = pending.filter((item) => !allowed.includes(item));
   const analysed = storeItems.filter((item) => analysedIds.has(item.mailId) && !ignored.has(item.mailId));
-  return { pending, blocked, analysed, allowed };
+  const ignoredPending = storeItems.filter((item) => !analysedIds.has(item.mailId) && ignored.has(item.mailId));
+  return { pending, blocked, analysed, allowed, ignoredPending };
 }
 
 export function classificationFor(mailId: string, cache: ClassificationCache): MailClassification | undefined {

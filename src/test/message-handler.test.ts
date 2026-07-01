@@ -12,6 +12,7 @@ function stubContext(overrides?: Partial<MessageHandlerContext>): MessageHandler
     copyToClipboard: mock.fn(async () => {}),
     showInfo: mock.fn(() => {}),
     showWarning: mock.fn(() => {}),
+    showConfirm: mock.fn(async () => true),
     readIgnoredIds: mock.fn(async () => []),
     writeIgnoredIds: mock.fn(async () => {}),
     openMailInOutlook: mock.fn(async () => {}),

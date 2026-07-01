@@ -138,7 +138,7 @@ export function renderWorkbenchHtml(input: DashboardRenderInput): string {
   const visibleThreadStore = filterVisibleThreadsForDashboard(threadStore);
   const threadAnalysis = input.threadAnalysis || { generatedAt: "", overview: { totalThreads: 0, mustHandleToday: 0, risks: 0, waitingForMe: 0, notices: 0 }, items: [] };
   const threadByMailId = buildThreadLookup(visibleThreadStore);
-  const queue = input.queue || { pending: [], blocked: [], analysed: [], allowed: [] };
+  const queue = input.queue || { pending: [], blocked: [], analysed: [], allowed: [], ignoredPending: [] };
   const classifications = input.classifications || normalizeClassificationCache({});
   const securityDecisions = input.securityDecisions || new Map<string, SecurityGateDecisionResult>();
   const configuredModel = String(config.modelFamily || "");
@@ -152,6 +152,7 @@ export function renderWorkbenchHtml(input: DashboardRenderInput): string {
   queueCounts["pending"] = queue.pending.length;
   queueCounts["blocked"] = queue.blocked.length;
   queueCounts["threads"] = visibleThreadStore.items.length;
+  queueCounts["ignored"] = (queueCounts["ignored"] || 0) + (queue.ignoredPending?.length || 0);
 
   const activeQueues = QUEUE_ORDER.filter((q) => (queueCounts[q] || 0) > 0);
   const defaultQueue = activeQueues[0] || "pending";
@@ -198,6 +199,14 @@ export function renderWorkbenchHtml(input: DashboardRenderInput): string {
     }
   }
 
+  for (const item of (queue.ignoredPending || [])) {
+    listData.push(`<div class="wb-item" data-queue="ignored" data-id="${escapeAttr(item.mailId)}" onclick="selectItem(this)">
+      <div class="wb-item-subject">${escapeHtml(item.subject || item.mailId)}</div>
+      <div class="wb-item-from">${escapeHtml(item.from || "")}</div>
+    </div>`);
+    detailData.push(`<div class="wb-reader" data-id="${escapeAttr(item.mailId)}">${renderMailDetail(item, "ignored", labels, "")}</div>`);
+  }
+
   const sortedThreads = [...(visibleThreadStore.items || [])].sort((a, b) => String(b.lastTime || "").localeCompare(String(a.lastTime || "")));
   for (const thread of sortedThreads) {
     listData.push(`<div class="wb-item" data-queue="threads" data-id="${escapeAttr(thread.threadId)}" onclick="selectItem(this)">
@@ -241,14 +250,16 @@ export function renderWorkbenchHtml(input: DashboardRenderInput): string {
   @keyframes pulse { 50% { opacity: 0.4; } }
   .wb-spacer { flex: 1; }
   .wb-act {
-    padding: 4px 10px; border-radius: 3px; font-size: 12px;
+    padding: 5px 14px; border-radius: 4px; font-size: 12px; font-weight: 500;
     background: var(--vscode-button-secondaryBackground, #3a3d41);
     color: var(--vscode-button-secondaryForeground, #fff);
-    border: 1px solid var(--vscode-contrastBorder, rgba(128,128,128,0.2));
+    border: 1px solid rgba(255,255,255,0.06);
     display: inline-flex; align-items: center; gap: 5px;
+    transition: background 0.15s, transform 0.1s;
   }
   .wb-act:hover:not(:disabled) { background: var(--vscode-button-secondaryHoverBackground, #45494e); }
-  .wb-act:disabled { opacity: 0.4; cursor: not-allowed; }
+  .wb-act:active:not(:disabled) { transform: scale(0.97); }
+  .wb-act:disabled { opacity: 0.35; cursor: not-allowed; }
   .button-spinner { width: 10px; height: 10px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -267,10 +278,10 @@ export function renderWorkbenchHtml(input: DashboardRenderInput): string {
     padding: 6px 8px; border-bottom: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.15));
   }
   .wb-tab {
-    padding: 3px 8px; border-radius: 3px; font-size: 11px;
+    padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 500;
     background: transparent;
     color: var(--vscode-sideBar-foreground, var(--vscode-foreground, #ccc));
-    opacity: 0.6; white-space: nowrap;
+    opacity: 0.6; white-space: nowrap; transition: background 0.15s, opacity 0.15s;
   }
   .wb-tab:hover { opacity: 1; background: var(--vscode-list-hoverBackground, rgba(255,255,255,0.06)); }
   .wb-tab.active {
@@ -312,10 +323,12 @@ export function renderWorkbenchHtml(input: DashboardRenderInput): string {
   .wb-section-body { font-size: 13px; line-height: 1.6; padding: 4px 0; opacity: 0.9; }
   .wb-body { font-size: 12px; line-height: 1.7; white-space: pre-wrap; padding: 12px 14px; margin: 8px 0; background: var(--vscode-textBlockQuote-background, rgba(128,128,128,0.08)); border-radius: 4px; border-left: 3px solid var(--vscode-focusBorder, #007fd4); max-height: 400px; overflow-y: auto; }
   .wb-actions { display: flex; gap: 8px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.12)); flex-wrap: wrap; }
-  .wb-btn { padding: 5px 14px; border-radius: 4px; font-size: 12px; background: var(--vscode-button-background, #0e639c); color: var(--vscode-button-foreground, #fff); display: inline-flex; align-items: center; gap: 6px; }
+  .wb-btn { padding: 5px 14px; border-radius: 4px; font-size: 12px; font-weight: 500; background: var(--vscode-button-background, #0e639c); color: var(--vscode-button-foreground, #fff); display: inline-flex; align-items: center; gap: 6px; transition: background 0.15s, transform 0.1s; }
   .wb-btn:hover:not(:disabled) { background: var(--vscode-button-hoverBackground, #1177bb); }
-  .wb-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-  .wb-btn.ghost { background: var(--vscode-button-secondaryBackground, #3a3d41); color: var(--vscode-button-secondaryForeground, #fff); }
+  .wb-btn:active:not(:disabled) { transform: scale(0.97); }
+  .wb-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .wb-btn.ghost { background: transparent; color: var(--vscode-button-secondaryForeground, #fff); border: 1px solid rgba(255,255,255,0.08); }
+  .wb-btn.ghost:hover:not(:disabled) { background: var(--vscode-button-secondaryHoverBackground, #45494e); }
   .wb-btn.is-busy { gap: 6px; }
 
   /* Thread analysis */

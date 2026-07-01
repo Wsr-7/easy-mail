@@ -9,6 +9,7 @@ export interface MessageHandlerContext {
   copyToClipboard: (text: string) => Promise<void>;
   showInfo: (message: string) => void;
   showWarning: (message: string) => void;
+  showConfirm: (message: string, yesLabel: string) => Promise<boolean>;
   readIgnoredIds: () => Promise<string[]>;
   writeIgnoredIds: (ids: string[]) => Promise<void>;
   openMailInOutlook: (mailId: string) => Promise<void>;
@@ -188,6 +189,17 @@ export async function handleWebviewMessage(ctx: MessageHandlerContext, message: 
 
   if (typed.type === "clearLocalCache") {
     await ctx.clearLocalCache();
+    return;
+  }
+
+  if (typed.type === "confirmClearLocalCache") {
+    const locale = await ctx.readLocale();
+    const msg = locale === "zh-CN" ? "确定要清空所有邮件和分析数据吗？此操作不可撤销。" : "Clear all mail and analysis data? This cannot be undone.";
+    const yesLabel = locale === "zh-CN" ? "确定清空" : "Clear All";
+    const confirmed = await ctx.showConfirm(msg, yesLabel);
+    if (confirmed) {
+      await ctx.clearLocalCache();
+    }
     return;
   }
 

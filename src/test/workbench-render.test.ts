@@ -43,7 +43,7 @@ function stubInput(overrides?: Partial<DashboardRenderInput>): DashboardRenderIn
     state: stubState(),
     store: emptyMailStore(),
     index: emptyMailIndex(),
-    queue: { pending: [], blocked: [], analysed: [], allowed: [] },
+    queue: { pending: [], blocked: [], analysed: [], allowed: [], ignoredPending: [] },
     classifications: normalizeClassificationCache({}),
     securityDecisions: new Map(),
     promptConfig: normalizePromptConfig({}),
@@ -81,7 +81,7 @@ describe("renderWorkbenchHtml", () => {
 
   it("renders queue tabs for non-empty queues", () => {
     const input = stubInput({
-      queue: { pending: [stubMail()], blocked: [], analysed: [], allowed: [] }
+      queue: { pending: [stubMail()], blocked: [], analysed: [], allowed: [], ignoredPending: [] }
     });
     const html = renderWorkbenchHtml(input);
     assert.ok(html.includes('data-queue-id="pending"'));
@@ -90,7 +90,7 @@ describe("renderWorkbenchHtml", () => {
 
   it("renders list items for pending mails", () => {
     const input = stubInput({
-      queue: { pending: [stubMail({ mailId: "m1", subject: "Hello" })], blocked: [], analysed: [], allowed: [] }
+      queue: { pending: [stubMail({ mailId: "m1", subject: "Hello" })], blocked: [], analysed: [], allowed: [], ignoredPending: [] }
     });
     const html = renderWorkbenchHtml(input);
     assert.ok(html.includes('data-queue="pending"'));
