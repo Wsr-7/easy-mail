@@ -38,7 +38,7 @@ export type DashboardLabels = {
   categories: Record<string, string>;
   card: Record<"from" | "received" | "summary" | "reason" | "suggestedAction" | "copyDraft" | "ignore" | "restore" | "openInOutlook" | "noItems" | "thread", string>;
   pending: Record<"title" | "blockedTitle" | "classification" | "autoAllowed" | "manualRequired" | "gateBlocked" | "securityReason" | "select", string>;
-  threads: Record<"title" | "participants" | "messages" | "lastTime" | "folders" | "contentStatus" | "security" | "analysis" | "analyzeThread" | "currentStatus" | "actionItems" | "risks" | "draftReply" | "timeline" | "attachments" | "mailIds", string>;
+  threads: Record<"title" | "participants" | "messages" | "lastTime" | "folders" | "contentStatus" | "security" | "analysis" | "analyzeThread" | "spotlight" | "currentStatus" | "keyDecisions" | "openQuestions" | "actionItems" | "waitingOn" | "risks" | "needMyReply" | "suggestedAction" | "partialContext" | "yes" | "no" | "draftReply" | "timeline" | "attachments" | "mailIds", string>;
   meetings: Record<"title" | "organizer" | "time" | "location" | "attendees" | "status" | "allDay" | "recurring" | "openInOutlook" | "notResponded" | "accepted" | "tentative" | "declined" | "organizer_status", string>;
   progress: Record<"pullMail" | "loadMore" | "sampleDigest" | "analyze" | "reports" | "loadModels" | "translate", string> & { detail: string };
   model: Record<"fallback" | "preferred", string>;
@@ -157,9 +157,18 @@ export const LABELS: Record<Locale, DashboardLabels> = {
       security: "安全状态",
       analysis: "线程分析",
       analyzeThread: "分析整个线程",
+      spotlight: "线程聚焦",
       currentStatus: "当前状态",
+      keyDecisions: "关键决定",
+      openQuestions: "开放问题",
       actionItems: "待办",
+      waitingOn: "等待对象",
       risks: "风险",
+      needMyReply: "需要我回复",
+      suggestedAction: "建议动作",
+      partialContext: "上下文不完整，请结合原始邮件核对",
+      yes: "是",
+      no: "否",
       draftReply: "回复草稿",
       timeline: "时间线",
       attachments: "附件",
@@ -308,9 +317,18 @@ export const LABELS: Record<Locale, DashboardLabels> = {
       security: "Security",
       analysis: "Thread Analysis",
       analyzeThread: "Analyze Full Thread",
+      spotlight: "Thread Spotlight",
       currentStatus: "Current Status",
+      keyDecisions: "Key Decisions",
+      openQuestions: "Open Questions",
       actionItems: "Action Items",
+      waitingOn: "Waiting On",
       risks: "Risks",
+      needMyReply: "Need My Reply",
+      suggestedAction: "Suggested Action",
+      partialContext: "Partial context; verify against original mail",
+      yes: "Yes",
+      no: "No",
       draftReply: "Draft Reply",
       timeline: "Timeline",
       attachments: "Attachments",

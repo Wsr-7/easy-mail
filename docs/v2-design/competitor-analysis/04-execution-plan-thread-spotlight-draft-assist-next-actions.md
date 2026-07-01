@@ -551,7 +551,7 @@ Completion Notes:
 
 ### A2. Add Thread Spotlight to Workbench thread detail
 
-Status: [ ] Not started
+Status: [X] Done
 
 Goal:
 
@@ -585,11 +585,21 @@ Acceptance criteria:
 
 Completion Notes:
 
-- Status:
+- Status: Done
 - Files changed:
+  - `src/lib/workbench-render.ts`
+  - `src/lib/dashboard-labels.ts`
+  - `src/test/workbench-render.test.ts`
 - Visual/HTML behavior:
+  - Workbench thread detail now renders a `Thread Spotlight` section only when thread analysis exists.
+  - Spotlight shows `currentStatus`, `keyDecisions`, `openQuestions`, `actionItems`, `waitingOn`, `risks`, `needMyReply`, `suggestedAction`, `draftReply`, and a partial-context warning when present.
+  - Empty list sections are hidden.
+  - Timeline remains below Spotlight and keeps the existing per-mail `openInOutlook` button behavior.
+  - No per-item source chips, multi-source selection, schema change, or prompt change was added.
 - Tests run:
-- Handover:
+  - `npm run compile`: pass
+  - `npm test -- --test-name-pattern=renderWorkbenchHtml`: pass, 218 tests reported passing
+- Handover: See `Handover - 2026-07-02 00:53 - Codex`.
 
 ---
 
@@ -1791,6 +1801,25 @@ Pre-merge challenge question:
 
 Append updates here when a coding agent starts or completes meaningful work.
 
+### Snapshot - 2026-07-02 - A2 Workbench Spotlight
+
+Status:
+
+- `A2. Add Thread Spotlight to Workbench thread detail` completed.
+
+Current recommendation:
+
+1. Continue with `A3. Expand Dashboard thread summary carefully`.
+2. Reuse the same labels added for A2.
+3. Keep Dashboard output short and truncated; Workbench is now the full detail view.
+
+Known caution:
+
+- `npm install` was needed because local `node_modules/.bin/tsc.cmd` was missing before validation.
+- `node_modules` is local dependency state and was not staged.
+
+---
+
 ### Snapshot - 2026-07-02 - A1 Inspection
 
 Status:
@@ -1832,6 +1861,62 @@ Known caution:
 ---
 
 ## 9. Handover Log
+
+#### Handover - 2026-07-02 00:53 - Codex
+
+Status: Done
+
+Changed:
+- Added Workbench `Thread Spotlight` rendering in `src/lib/workbench-render.ts`.
+- Added thread labels for Spotlight fields in `src/lib/dashboard-labels.ts`.
+- Added Workbench render coverage for Spotlight fields, empty section omission, partial-context warning, and existing timeline Outlook open button.
+
+Validated:
+- `npm run compile`: pass
+- `npm test -- --test-name-pattern=renderWorkbenchHtml`: pass, 218 tests reported passing
+
+Known issues:
+- Local dependencies were missing at first, so `npm install` was run before validation.
+- No manual visual check was run because the project rules disable visual collaboration/browser workflows.
+
+Last safe stopping point:
+- A2 is complete and validated. Workbench shows full Spotlight detail; Dashboard has not been expanded yet.
+
+Uncommitted changes / dirty files:
+- `docs/v2-design/competitor-analysis/04-execution-plan-thread-spotlight-draft-assist-next-actions.md`
+- `src/lib/workbench-render.ts`
+- `src/lib/dashboard-labels.ts`
+- `src/test/workbench-render.test.ts`
+
+Next recommended step:
+- Start `A3. Expand Dashboard thread summary carefully` by claiming only A3, then update `renderThreadAnalysisSummary` with truncated scan-view fields and tests.
+
+---
+
+#### Handover - 2026-07-02 00:50 - Codex
+
+Status: In progress
+
+Changed:
+- Claimed `A2. Add Thread Spotlight to Workbench thread detail`.
+
+Validated:
+- Ran `git status --short`: no dirty files reported before claiming A2.
+- Read latest handover and A2 acceptance criteria.
+
+Known issues:
+- No A2 source code changed yet in this checkpoint.
+
+Last safe stopping point:
+- Before Workbench Spotlight implementation.
+
+Uncommitted changes / dirty files:
+- `docs/v2-design/competitor-analysis/04-execution-plan-thread-spotlight-draft-assist-next-actions.md` updated to claim A2.
+
+Next recommended step:
+- Edit `src/lib/workbench-render.ts` and `src/lib/dashboard-labels.ts`, then update targeted Workbench render tests.
+
+---
 
 #### Handover - 2026-07-02 01:03 - Codex
 

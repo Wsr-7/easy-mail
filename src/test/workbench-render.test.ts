@@ -9,6 +9,7 @@ import type { StoredMeeting as StoredMeetingItem } from "../lib/meeting-store";
 import type { DashboardRenderInput } from "../lib/dashboard-render";
 import type { DashboardState } from "../lib/dashboard-state";
 import type { AnalysisItem } from "../lib/analysis-schema";
+import type { ThreadAnalysisResult } from "../lib/thread-analysis-schema";
 
 function stubMail(overrides?: Partial<StoredMail>): StoredMail {
   return {
@@ -118,6 +119,72 @@ describe("renderWorkbenchHtml", () => {
     const html = renderWorkbenchHtml(input);
     assert.ok(html.includes("Thread Subject"));
     assert.ok(html.includes('data-id="t1"'));
+  });
+
+  it("renders thread spotlight fields in thread detail", () => {
+    const threadAnalysis: ThreadAnalysisResult = {
+      generatedAt: "2026-07-02T00:00:00.000Z",
+      overview: { totalThreads: 1, mustHandleToday: 0, risks: 1, waitingForMe: 1, notices: 0 },
+      items: [{
+        threadId: "t1",
+        category: "waitingForMe",
+        priority: "P1",
+        subject: "Thread Subject",
+        participants: ["alice@test.com"],
+        lastTime: "2024-01-02",
+        oneLineSummary: "Waiting for approval.",
+        currentStatus: "Approval is not confirmed.",
+        keyDecisions: ["Move release to Thursday."],
+        openQuestions: [],
+        actionItems: [{ owner: "Bob", task: "Confirm approver", deadline: "Today", sourceMailId: "m1", sourceTime: "2024-01-02" }],
+        waitingOn: ["Bob"],
+        risks: [{ level: "high", description: "Release may miss the window.", sourceMailId: "m2" }],
+        needMyReply: true,
+        suggestedAction: "Reply asking Bob to confirm.",
+        draftReply: "",
+        confidence: 0.8,
+        evidence: [],
+        needsOriginalMailCheck: false,
+        partialContext: true
+      }]
+    };
+    const input = stubInput({
+      threadStore: {
+        generatedAt: "", lastBuiltAt: "",
+        items: [{
+          threadId: "t1", conversationId: "c1", normalizedSubject: "thread",
+          subject: "Thread Subject",
+          participants: ["alice@test.com"],
+          folders: ["Inbox"], startTime: "2024-01-01", lastTime: "2024-01-02",
+          messageCount: 2, unreadCount: 0, hasAttachments: false,
+          sourceMailIds: ["m1", "m2"],
+          timeline: [{
+            mailId: "m1", internetMessageId: "", entryId: "entry-1", conversationId: "c1",
+            conversationIndex: "", subject: "Thread Subject", from: "Alice", senderName: "Alice",
+            senderEmail: "alice@test.com", receivedTime: "2024-01-02", sentTime: "",
+            folder: "Inbox", bodyPreview: "Please confirm.", bodyClean: "Please confirm.",
+            bodyDelta: "Please confirm.", bodyHash: "", isDuplicateBody: false,
+            contentAvailable: true, attachmentCount: 0, attachmentNames: []
+          }],
+          contentStatus: "available",
+          security: { totalMessages: 2, allowedMessages: 2, manualConfirmMessages: 0, blockedMessages: 0, highestClassificationLevel: 0, partialContext: false, reasons: [] }
+        }]
+      },
+      threadAnalysis
+    });
+
+    const html = renderWorkbenchHtml(input);
+
+    assert.ok(html.includes("Thread Spotlight"));
+    assert.ok(html.includes("Approval is not confirmed."));
+    assert.ok(html.includes("Move release to Thursday."));
+    assert.ok(!html.includes("Open Questions"));
+    assert.ok(html.includes("Bob: Confirm approver: Today"));
+    assert.ok(html.includes("Release may miss the window."));
+    assert.ok(html.includes("Need My Reply"));
+    assert.ok(html.includes("Reply asking Bob to confirm."));
+    assert.ok(html.includes("Partial context; verify against original mail"));
+    assert.ok(html.includes('data-action="openInOutlook" data-mail-id="m1"'));
   });
 
   it("handles focusItem message via client-side JS", () => {

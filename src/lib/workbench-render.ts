@@ -73,6 +73,51 @@ function renderAnalysisDetail(item: AnalysisResult["items"][number], queue: stri
   </div>`;
 }
 
+function renderSpotlightList(label: string, values: string[]): string {
+  if (!values.length) {
+    return "";
+  }
+  return `<h4>${escapeHtml(label)}</h4><ul class="wb-ul">${values.map((value) => `<li>${escapeHtml(value)}</li>`).join("")}</ul>`;
+}
+
+function renderSpotlightActionItems(analysis: ThreadAnalysisResult["items"][number], labels: DashboardLabels): string {
+  if (!analysis.actionItems.length) {
+    return "";
+  }
+  return `<h4>${escapeHtml(labels.threads.actionItems)}</h4><ul class="wb-ul">${analysis.actionItems.map((item) => {
+    const task = [item.owner, item.task, item.deadline].filter(Boolean).join(": ") || "-";
+    return `<li>${escapeHtml(task)}</li>`;
+  }).join("")}</ul>`;
+}
+
+function renderSpotlightRisks(analysis: ThreadAnalysisResult["items"][number], labels: DashboardLabels): string {
+  if (!analysis.risks.length) {
+    return "";
+  }
+  return `<h4>${escapeHtml(labels.threads.risks)}</h4><ul class="wb-ul">${analysis.risks.map((risk) => `<li><span class="wb-risk-level">${escapeHtml(risk.level)}</span> ${escapeHtml(risk.description)}</li>`).join("")}</ul>`;
+}
+
+function renderThreadSpotlight(analysis: ThreadAnalysisResult["items"][number] | undefined, labels: DashboardLabels): string {
+  if (!analysis) {
+    return "";
+  }
+  const status = analysis.currentStatus || analysis.oneLineSummary;
+  return `
+    <section class="wb-thread-analysis">
+      <h4>${escapeHtml(labels.threads.spotlight)}</h4>
+      ${analysis.partialContext ? `<div class="wb-warn wb-section-body">${escapeHtml(labels.threads.partialContext)}</div>` : ""}
+      ${status ? `<div class="wb-field"><strong>${escapeHtml(labels.threads.currentStatus)}:</strong></div><div class="wb-section-body">${escapeHtml(status)}</div>` : ""}
+      ${renderSpotlightList(labels.threads.keyDecisions, analysis.keyDecisions)}
+      ${renderSpotlightList(labels.threads.openQuestions, analysis.openQuestions)}
+      ${renderSpotlightActionItems(analysis, labels)}
+      ${renderSpotlightList(labels.threads.waitingOn, analysis.waitingOn)}
+      ${renderSpotlightRisks(analysis, labels)}
+      <div class="wb-field"><strong>${escapeHtml(labels.threads.needMyReply)}:</strong> ${escapeHtml(analysis.needMyReply ? labels.threads.yes : labels.threads.no)}</div>
+      ${analysis.suggestedAction ? `<div class="wb-field"><strong>${escapeHtml(labels.threads.suggestedAction)}:</strong></div><div class="wb-section-body">${escapeHtml(analysis.suggestedAction)}</div>` : ""}
+      ${analysis.draftReply ? renderDraftBox(analysis.draftReply) : ""}
+    </section>`;
+}
+
 function renderThreadDetail(
   thread: ThreadStore["items"][number],
   labels: DashboardLabels,
@@ -90,15 +135,6 @@ function renderThreadDetail(
     </div>`
   ).join("");
 
-  const analysisHtml = analysis ? `
-    <div class="wb-thread-analysis">
-      <h4>${escapeHtml(labels.threads.currentStatus)}</h4>
-      <div class="wb-section-body">${escapeHtml(analysis.currentStatus || analysis.oneLineSummary || "-")}</div>
-      ${analysis.actionItems.length ? `<h4>${escapeHtml(labels.threads.actionItems)}</h4><ul class="wb-ul">${analysis.actionItems.map((a) => `<li>${escapeHtml([a.owner, a.task, a.deadline].filter(Boolean).join(": "))}</li>`).join("")}</ul>` : ""}
-      ${analysis.risks?.length ? `<h4>${escapeHtml(labels.threads.risks)}</h4><ul class="wb-ul">${analysis.risks.map((r) => `<li><span class="wb-risk-level">${escapeHtml(r.level)}</span> ${escapeHtml(r.description)}</li>`).join("")}</ul>` : ""}
-      ${analysis.draftReply ? renderDraftBox(analysis.draftReply) : ""}
-    </div>` : "";
-
   return `<div class="wb-detail-card">
     <h3>${escapeHtml(thread.subject || thread.threadId)}</h3>
     <div class="wb-meta-grid">
@@ -109,7 +145,7 @@ function renderThreadDetail(
     <div class="wb-actions">
       <button class="wb-btn${busyKind === "analyzeThread" ? " is-busy" : ""}" data-action="analyzeThread" data-thread-id="${escapeAttr(thread.threadId)}"${busyKind ? " disabled" : ""}>${escapeHtml(labels.threads.analyzeThread)}${renderButtonSpinner(busyKind === "analyzeThread")}</button>
     </div>
-    ${analysisHtml}
+    ${renderThreadSpotlight(analysis, labels)}
     ${timelineItems.length ? `<div class="wb-timeline-section"><h4>${escapeHtml(labels.threads.timeline)} (${timelineItems.length})</h4>${timeline}</div>` : ""}
   </div>`;
 }
