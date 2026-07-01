@@ -1670,6 +1670,7 @@ Completion Notes:
   - `npm run compile`: pass
   - `npm test`: pass, 258 tests, 0 fail
 - Results: Full suite green (241 previous + 14 next-actions + 3 markNextAction handler)
+- Commit: `92c24d63dcb9b8642c5f7bfd14d8376e3c09a929`
 - Handover: See Handover - 2026-07-02 - Claude Opus (D1-D10)
 
 ---
@@ -2075,7 +2076,9 @@ Last safe stopping point:
 - All milestones A-D complete.
 
 Uncommitted changes / dirty files:
-- See git status below (will be committed)
+- None — committed as `92c24d6`
+
+Commit: `92c24d63dcb9b8642c5f7bfd14d8376e3c09a929`
 
 Next recommended step:
 - Review cross-milestone acceptance checklist
