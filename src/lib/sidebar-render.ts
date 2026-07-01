@@ -56,24 +56,35 @@ function queueLabel(queueId: string, labels: DashboardLabels, categoryLabels: Re
   return categoryLabels[queueId] || labels.categories[queueId] || queueId;
 }
 
+function shortTime(t: string): string {
+  const m = /(\d{2}:\d{2})/.exec(t || "");
+  return m ? m[1] : "";
+}
+
 function renderCompactMailRow(item: StoredMail, queue: string): string {
+  const time = shortTime(item.receivedTime || "");
+  const meta = [item.from || "", time].filter(Boolean).join(" · ");
   return `<div class="sb-row" data-queue="${escapeAttr(queue)}" data-mail-id="${escapeAttr(item.mailId)}" onclick="openItem('${escapeAttr(item.mailId)}')">
-    <span class="sb-subject">${escapeHtml(item.subject || item.mailId)}</span>
-    <span class="sb-meta">${escapeHtml(item.from || "")}</span>
+    <div class="sb-subject" title="${escapeAttr(item.subject || item.mailId)}">${escapeHtml(item.subject || item.mailId)}</div>
+    <div class="sb-line2">${escapeHtml(meta)}</div>
   </div>`;
 }
 
 function renderCompactAnalysisRow(item: AnalysisResult["items"][number], queue: string, labels: DashboardLabels): string {
+  const time = shortTime(item.receivedTime || "");
+  const meta = [item.sender || "", time].filter(Boolean).join(" · ");
   return `<div class="sb-row" data-queue="${escapeAttr(queue)}" data-mail-id="${escapeAttr(item.mailId)}" onclick="openItem('${escapeAttr(item.mailId)}')">
-    <span class="sb-subject">${escapeHtml(item.subject || item.mailId)}</span>
-    <span class="sb-badge">${escapeHtml(formatPriority(item.priority, labels))}</span>
+    <div class="sb-subject" title="${escapeAttr(item.subject || item.mailId)}">${escapeHtml(item.subject || item.mailId)}</div>
+    <div class="sb-line2"><span class="sb-line2-meta">${escapeHtml(meta)}</span><span class="sb-badge">${escapeHtml(formatPriority(item.priority, labels))}</span></div>
   </div>`;
 }
 
 function renderCompactThreadRow(thread: ThreadStore["items"][number]): string {
+  const time = shortTime(thread.lastTime || "");
+  const meta = [thread.participants.slice(0, 2).join(", "), time].filter(Boolean).join(" · ");
   return `<div class="sb-row" data-queue="threads" data-thread-id="${escapeAttr(thread.threadId)}" onclick="openItem('${escapeAttr(thread.threadId)}')">
-    <span class="sb-subject">${escapeHtml(thread.subject || thread.threadId)}</span>
-    <span class="sb-badge">${escapeHtml(String(thread.messageCount))}</span>
+    <div class="sb-subject" title="${escapeAttr(thread.subject || thread.threadId)}">${escapeHtml(thread.subject || thread.threadId)}</div>
+    <div class="sb-line2"><span class="sb-line2-meta">${escapeHtml(meta)}</span><span class="sb-badge">${escapeHtml(String(thread.messageCount))}</span></div>
   </div>`;
 }
 
@@ -90,9 +101,10 @@ function meetingStatusBadge(status: string, labels: DashboardLabels): string {
 }
 
 function renderCompactMeetingRow(item: StoredMeeting, labels: DashboardLabels): string {
+  const meta = [item.organizer || "", item.start || ""].filter(Boolean).join(" · ");
   return `<div class="sb-row" data-queue="meetings" data-meeting-id="${escapeAttr(item.entryId)}" onclick="openItem('${escapeAttr(item.entryId)}')">
-    <span class="sb-subject">${escapeHtml(item.subject || "-")}</span>
-    ${meetingStatusBadge(item.responseStatus, labels)}
+    <div class="sb-subject" title="${escapeAttr(item.subject || "-")}">${escapeHtml(item.subject || "-")}</div>
+    <div class="sb-line2"><span class="sb-line2-meta">${escapeHtml(meta)}</span>${meetingStatusBadge(item.responseStatus, labels)}</div>
   </div>`;
 }
 
@@ -322,14 +334,15 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
   /* ── Item rows ── */
   .sb-list-area { padding: 4px 0; }
   .sb-row {
-    display: flex; align-items: center; gap: 6px; padding: 6px 12px; cursor: pointer;
+    display: block; padding: 5px 12px; cursor: pointer;
     border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, rgba(128,128,128,0.08));
   }
   .sb-row[hidden] { display: none; }
   .sb-row:hover { background: var(--vscode-list-hoverBackground, rgba(128,128,128,0.08)); }
-  .sb-subject { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
-  .sb-meta { font-size: 11px; opacity: 0.55; white-space: nowrap; max-width: 100px; overflow: hidden; text-overflow: ellipsis; }
-  .sb-badge { font-size: 10px; padding: 1px 6px; border-radius: 8px; white-space: nowrap; background: var(--vscode-badge-background, #4d4d4d); color: var(--vscode-badge-foreground, #fff); }
+  .sb-subject { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; line-height: 1.4; }
+  .sb-line2 { display: flex; align-items: center; gap: 6px; margin-top: 1px; }
+  .sb-line2-meta { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; opacity: 0.55; }
+  .sb-badge { font-size: 10px; padding: 1px 6px; border-radius: 8px; white-space: nowrap; flex-shrink: 0; background: var(--vscode-badge-background, #4d4d4d); color: var(--vscode-badge-foreground, #fff); }
 
   /* ── Meeting status badges ── */
   .sb-mtg-warn { background: var(--vscode-editorWarning-foreground, #cca700); color: #000; }

@@ -226,7 +226,7 @@ export function renderWorkbenchHtml(input: DashboardRenderInput): string {
   .wb-placeholder { display: flex; align-items: center; justify-content: center; height: 100%; opacity: 0.3; font-size: 14px; }
 
   /* Detail card styles */
-  .wb-detail-card { padding: 24px 28px; max-width: 800px; }
+  .wb-detail-card { padding: 24px 28px; max-width: 960px; }
   .wb-detail-card h3 { font-size: 17px; line-height: 1.4; margin-bottom: 4px; font-weight: 600; }
   .wb-detail-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
   .wb-detail-header h3 { flex: 1; }

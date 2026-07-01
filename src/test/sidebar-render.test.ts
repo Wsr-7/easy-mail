@@ -272,4 +272,28 @@ describe("renderSidebarHtml", () => {
     const html = renderSidebarHtml(stubInput());
     assert.ok(html.includes('data-queue-id="meetings"'));
   });
+
+  it("renders two-line rows with tooltip on subject", () => {
+    const input = stubInput({
+      queue: { pending: [stubMail({ mailId: "m1", subject: "Long subject line for testing", from: "alice@test.com", receivedTime: "2024-01-01 14:30" })], blocked: [], analysed: [], allowed: [], ignoredPending: [] }
+    });
+    const html = renderSidebarHtml(input);
+    assert.ok(html.includes('title="Long subject line for testing"'), "subject should have tooltip");
+    assert.ok(html.includes("sb-line2"), "should have second line");
+    assert.ok(html.includes("alice@test.com"), "second line should show sender");
+    assert.ok(html.includes("14:30"), "second line should show time");
+  });
+
+  it("renders analysis rows with sender and priority on second line", () => {
+    const input = stubInput({
+      state: stubState({}, [
+        { id: "mustHandleToday", items: [stubAnalysisItem({ subject: "Urgent", sender: "ceo@test.com", receivedTime: "2024-01-01 09:15" })] }
+      ])
+    });
+    const html = renderSidebarHtml(input);
+    assert.ok(html.includes("sb-line2"), "should have second line");
+    assert.ok(html.includes("ceo@test.com"), "second line should show sender");
+    assert.ok(html.includes("09:15"), "second line should show time");
+    assert.ok(html.includes("sb-badge"), "second line should show priority badge");
+  });
 });
