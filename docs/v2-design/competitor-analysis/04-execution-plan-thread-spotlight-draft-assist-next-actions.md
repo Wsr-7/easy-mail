@@ -496,7 +496,7 @@ Acceptance goal:
 
 ### A1. Inspect current thread rendering paths
 
-Status: [ ] Not started
+Status: [X] Done
 
 Likely files:
 
@@ -521,11 +521,30 @@ Acceptance criteria:
 
 Completion Notes:
 
-- Status:
+- Status: Done
 - Files inspected:
+  - `src/lib/workbench-render.ts`
+  - `src/lib/dashboard-render.ts`
+  - `src/lib/report-thread.ts`
+  - `src/lib/thread-analysis-schema.ts`
+  - `src/lib/dashboard-labels.ts`
+  - `src/lib/message-handler.ts`
+  - `src/extension.ts`
+  - `scripts/open-outlook-mail.vbs`
+  - `src/test/workbench-render.test.ts`
+  - `src/test/dashboard-render.test.ts`
+  - `src/test/report-thread.test.ts`
+  - `src/test/message-handler.test.ts`
 - Findings:
-- Tests run:
-- Handover:
+  - Workbench thread analysis is rendered in `renderThreadDetail` in `src/lib/workbench-render.ts`. It currently shows `currentStatus`, `actionItems`, `risks`, and `draftReply`; A2 should add the compact `Thread Spotlight` section there.
+  - Dashboard thread summary is rendered through `renderThreadsPanel` -> `renderThreadCard` -> `renderThreadAnalysisSummary` in `src/lib/dashboard-render.ts`. It currently shows `currentStatus`, full `actionItems`, full `risks`, and `draftReply`; A3 should keep this truncated and scannable.
+  - Thread report rendering is `buildThreadReport` in `src/lib/report-thread.ts`. It already renders most existing thread fields, but A4 should align the structure with the Spotlight shape and omit empty sections.
+  - Available thread schema fields are already present in `ThreadAnalysisItem`; no schema or prompt change is needed for Milestone A.
+  - Label helpers are `DashboardLabels`, `LABELS`, and `getLabels` in `src/lib/dashboard-labels.ts`. New UI labels are needed for `Thread Spotlight`, `keyDecisions`, `openQuestions`, `waitingOn`, `needMyReply`, `partialContext`, and possibly thread-level `suggestedAction`.
+  - Workbench timeline already supports opening individual timeline mails: each timeline message with `mailId` renders a `data-action="openInOutlook"` button. The message handler dispatches to `openMailInOutlook(mailId)`, which resolves `entryId`/`storeId` through mail index/store/analysis source and calls `scripts/open-outlook-mail.vbs`.
+  - Dashboard timeline currently shows mail ID anchors only, not direct Outlook buttons.
+- Tests run: Not run; A1 was inspection/documentation only.
+- Handover: See `Handover - 2026-07-02 01:03 - Codex`.
 
 ---
 
@@ -1771,6 +1790,25 @@ Pre-merge challenge question:
 
 Append updates here when a coding agent starts or completes meaningful work.
 
+### Snapshot - 2026-07-02 - A1 Inspection
+
+Status:
+
+- `A1. Inspect current thread rendering paths` completed.
+
+Current recommendation:
+
+1. Continue with `A2. Add Thread Spotlight to Workbench thread detail`.
+2. Keep Workbench as the full detail surface; Dashboard should remain a truncated scan view in A3.
+3. Do not add per-item Spotlight source jumps. Workbench timeline already has per-mail `openInOutlook` buttons.
+
+Known caution:
+
+- Dashboard timeline currently links mail IDs to in-page mail anchors, not direct Outlook open buttons.
+- `findOutlookOpenTarget` opens by `mailId` through mail index/store/analysis source; it does not read `ThreadMessage.entryId` directly.
+
+---
+
 ### Snapshot - 2026-07-01 - Initial Plan
 
 Status:
@@ -1793,6 +1831,58 @@ Known caution:
 ---
 
 ## 9. Handover Log
+
+#### Handover - 2026-07-02 01:03 - Codex
+
+Status: Done
+
+Changed:
+- Completed `A1. Inspect current thread rendering paths`.
+- Updated A1 Completion Notes and Current Snapshot Updates with rendering path findings.
+
+Validated:
+- Inspected Workbench, Dashboard, report, schema, labels, message handler, extension Outlook open path, VBS open script, and related tests.
+- Tests not run; A1 did not change source behavior.
+
+Known issues:
+- Dashboard timeline has mail ID anchors but no direct Outlook open button.
+- Workbench timeline opens through `mailId` lookup in mail index/store/analysis source; `ThreadMessage.entryId` is not used directly by `openMailInOutlook`.
+
+Last safe stopping point:
+- A1 is complete. No product code has been changed.
+
+Uncommitted changes / dirty files:
+- `docs/v2-design/competitor-analysis/04-execution-plan-thread-spotlight-draft-assist-next-actions.md` updated for A1.
+
+Next recommended step:
+- Start `A2. Add Thread Spotlight to Workbench thread detail` by claiming only A2, adding a pre-work checkpoint, then editing `src/lib/workbench-render.ts`, `src/lib/dashboard-labels.ts`, and targeted tests.
+
+---
+
+#### Handover - 2026-07-02 00:44 - Codex
+
+Status: In progress
+
+Changed:
+- Claimed `A1. Inspect current thread rendering paths`.
+
+Validated:
+- Read this execution plan and latest handover.
+- Ran `git status --short`: no dirty files reported.
+
+Known issues:
+- No source files inspected yet in this handover entry.
+
+Last safe stopping point:
+- Before code inspection for A1.
+
+Uncommitted changes / dirty files:
+- `docs/v2-design/competitor-analysis/04-execution-plan-thread-spotlight-draft-assist-next-actions.md` updated to claim A1.
+
+Next recommended step:
+- Inspect Workbench, Dashboard, report, schema, tests, and Outlook open timeline behavior for A1.
+
+---
 
 ### Handover - 2026-07-01 - Planning Agent
 
