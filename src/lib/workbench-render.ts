@@ -85,9 +85,8 @@ function renderThreadDetail(
       <div class="wb-tl-head">
         <strong>${escapeHtml(msg.from || msg.senderEmail || "")}</strong>
         <span class="wb-tl-time">${escapeHtml(msg.receivedTime || msg.sentTime || "")}</span>
-        ${msg.mailId ? `<button class="wb-tl-action" data-action="openInOutlook" data-mail-id="${escapeAttr(msg.mailId)}" title="${escapeAttr(labels.card.openInOutlook)}">↗</button>` : ""}
       </div>
-      <div class="wb-tl-body">${escapeHtml(msg.bodyDelta || msg.bodyPreview || "")}</div>
+      <div class="wb-tl-body-wrap">${msg.mailId ? `<button class="wb-tl-open" data-action="openInOutlook" data-mail-id="${escapeAttr(msg.mailId)}" title="${escapeAttr(labels.card.openInOutlook)}">↗</button>` : ""}<div class="wb-tl-body">${escapeHtml(msg.bodyDelta || msg.bodyPreview || "")}</div></div>
     </div>`
   ).join("");
 
@@ -265,10 +264,11 @@ export function renderWorkbenchHtml(input: DashboardRenderInput): string {
   .wb-tl-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
   .wb-tl-head strong { font-size: 12px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .wb-tl-time { font-size: 11px; opacity: 0.5; flex-shrink: 0; }
-  .wb-tl-action { flex-shrink: 0; width: 22px; height: 22px; padding: 0; border-radius: 4px; background: transparent; color: var(--vscode-foreground, #ccc); opacity: 0; font-size: 12px; transition: opacity 0.15s; }
-  .wb-tl-item:hover .wb-tl-action { opacity: 0.5; }
-  .wb-tl-action:hover { opacity: 1 !important; background: var(--vscode-list-hoverBackground, rgba(128,128,128,0.15)); }
-  .wb-tl-body { font-size: 12px; line-height: 1.6; white-space: pre-wrap; padding: 8px 12px; margin-top: 4px; border-radius: 4px; background: var(--vscode-textBlockQuote-background, rgba(128,128,128,0.08)); color: var(--vscode-editor-foreground, #ccc); }
+  .wb-tl-body-wrap { position: relative; margin-top: 4px; }
+  .wb-tl-open { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; padding: 0; border-radius: 4px; background: var(--vscode-button-secondaryBackground, #3a3d41); color: var(--vscode-button-secondaryForeground, #fff); font-size: 14px; line-height: 24px; text-align: center; opacity: 0; transition: opacity 0.15s; z-index: 1; }
+  .wb-tl-body-wrap:hover .wb-tl-open { opacity: 0.7; }
+  .wb-tl-open:hover { opacity: 1 !important; background: var(--vscode-button-hoverBackground, #1177bb); }
+  .wb-tl-body { font-size: 12px; line-height: 1.6; white-space: pre-wrap; padding: 8px 36px 8px 12px; border-radius: 4px; background: var(--vscode-textBlockQuote-background, rgba(128,128,128,0.08)); color: var(--vscode-editor-foreground, #ccc); }
 
   /* Draft box */
   .draft-box { position: relative; margin-top: 8px; }
