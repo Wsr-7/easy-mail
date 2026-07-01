@@ -13,6 +13,7 @@ export interface MessageHandlerContext {
   readIgnoredIds: () => Promise<string[]>;
   writeIgnoredIds: (ids: string[]) => Promise<void>;
   openMailInOutlook: (mailId: string) => Promise<void>;
+  openMeetingInOutlook: (meetingId: string) => Promise<void>;
   openGuide: () => Promise<void>;
   openDigest: () => Promise<void>;
   openSummary: () => Promise<void>;
@@ -39,7 +40,7 @@ export async function handleWebviewMessage(ctx: MessageHandlerContext, message: 
     return;
   }
 
-  const typed = message as { type?: string; draftReply?: string; mailId?: string; mailIds?: string[]; threadId?: string; config?: unknown; silent?: boolean };
+  const typed = message as { type?: string; draftReply?: string; mailId?: string; mailIds?: string[]; threadId?: string; meetingId?: string; config?: unknown; silent?: boolean };
   await ctx.log("message:received", {
     type: typed.type || "",
     mailId: typed.mailId || "",
@@ -83,6 +84,11 @@ export async function handleWebviewMessage(ctx: MessageHandlerContext, message: 
 
   if (typed.type === "openInOutlook" && typed.mailId) {
     await ctx.openMailInOutlook(String(typed.mailId));
+    return;
+  }
+
+  if (typed.type === "openMeetingInOutlook" && typed.meetingId) {
+    await ctx.openMeetingInOutlook(String(typed.meetingId));
     return;
   }
 

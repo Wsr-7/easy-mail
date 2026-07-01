@@ -12,8 +12,10 @@ import type { SecurityGateDecisionResult } from "./security-types";
 import { emptyThreadStore, type ThreadStore } from "./thread-store";
 import type { ThreadAnalysisResult } from "./thread-analysis-schema";
 import { renderButtonSpinner, formatClassification, formatGateStatus, formatThreadSecurity, formatPriority, renderDraftBox, renderModelOptions, renderRangeValueControl, renderClassificationOptions, formatAnalyzeNextLabel, type DashboardRenderInput } from "./dashboard-render";
+import { emptyMeetingStore, type MeetingStore, type StoredMeeting } from "./meeting-store";
 
 const QUEUE_ORDER = [
+  "meetings",
   "pending",
   "blocked",
   "mustHandleToday",
@@ -28,12 +30,13 @@ const QUEUE_ORDER = [
 ] as const;
 
 const STABLE_QUEUES = new Set([
-  "pending", "blocked", "mustHandleToday", "risk", "waitingForMe",
+  "meetings", "pending", "blocked", "mustHandleToday", "risk", "waitingForMe",
   "followUp", "importantSender", "notice", "threads", "ignored", "uncertain"
 ]);
 
 function queueIcon(queueId: string): string {
   switch (queueId) {
+    case "meetings": return "📅";
     case "mustHandleToday": return "!";
     case "risk": return "⚠";
     case "waitingForMe": return "←";
@@ -50,6 +53,7 @@ function queueIcon(queueId: string): string {
 }
 
 function queueLabel(queueId: string, labels: DashboardLabels, categoryLabels: Record<string, string>): string {
+  if (queueId === "meetings") return labels.meetings.title;
   if (queueId === "pending") return labels.pending.title;
   if (queueId === "blocked") return labels.pending.blockedTitle;
   if (queueId === "threads") return labels.threads.title;
@@ -151,6 +155,42 @@ function renderSidebarThreadRow(
 </div>`;
 }
 
+function meetingStatusBadge(status: string, labels: DashboardLabels): string {
+  const map: Record<string, { label: string; cls: string }> = {
+    notResponded: { label: labels.meetings.notResponded, cls: "sb-mtg-warn" },
+    accepted: { label: labels.meetings.accepted, cls: "sb-mtg-ok" },
+    tentative: { label: labels.meetings.tentative, cls: "sb-mtg-tentative" },
+    declined: { label: labels.meetings.declined, cls: "sb-mtg-dim" },
+    organizer: { label: labels.meetings.organizer_status, cls: "sb-mtg-ok" }
+  };
+  const m = map[status] || map["notResponded"]!;
+  return `<span class="sb-badge ${m.cls}">${escapeHtml(m.label)}</span>`;
+}
+
+function renderSidebarMeetingRow(item: StoredMeeting, labels: DashboardLabels): string {
+  const timeRange = `${escapeHtml(item.start || "-")} — ${escapeHtml(item.end || "-")}`;
+  const flags: string[] = [];
+  if (item.isAllDay) flags.push(labels.meetings.allDay);
+  if (item.isRecurring) flags.push(labels.meetings.recurring);
+  const flagsHtml = flags.length ? `<span class="sb-meta">${escapeHtml(flags.join(", "))}</span>` : "";
+  return `<div class="sb-row" data-queue="meetings" data-meeting-id="${escapeAttr(item.entryId)}">
+  <div class="sb-row-main" onclick="toggleRow(this)">
+    <span class="sb-subject">${escapeHtml(item.subject || "-")}</span>
+    ${meetingStatusBadge(item.responseStatus, labels)}
+  </div>
+  <div class="sb-detail">
+    <div class="sb-field"><strong>${escapeHtml(labels.meetings.organizer)}:</strong> ${escapeHtml(item.organizer || "-")}</div>
+    <div class="sb-field"><strong>${escapeHtml(labels.meetings.time)}:</strong> ${escapeHtml(timeRange)}</div>
+    ${item.location ? `<div class="sb-field"><strong>${escapeHtml(labels.meetings.location)}:</strong> ${escapeHtml(item.location)}</div>` : ""}
+    ${item.requiredAttendees ? `<div class="sb-field"><strong>${escapeHtml(labels.meetings.attendees)}:</strong> ${escapeHtml(item.requiredAttendees)}</div>` : ""}
+    ${flagsHtml ? `<div class="sb-field">${flagsHtml}</div>` : ""}
+    <div class="sb-actions">
+      <button class="sb-btn" data-action="openMeetingInOutlook" data-meeting-id="${escapeAttr(item.entryId)}">${escapeHtml(labels.meetings.openInOutlook)}</button>
+    </div>
+  </div>
+</div>`;
+}
+
 export function renderSidebarHtml(input: DashboardRenderInput): string {
   const { state, store, index, availableModels, busyKind, isBusy } = input;
   const config = state.config as Record<string, unknown>;
@@ -183,6 +223,12 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
   for (const cat of state.categories) {
     queueCounts[cat.id] = cat.items.length;
   }
+  const meetingStore = input.meetingStore || emptyMeetingStore();
+  const unrespondedMeetings = meetingStore.items.filter((m) => m.responseStatus === "notResponded");
+  const upcomingMeetings = meetingStore.items.filter((m) => m.responseStatus !== "notResponded");
+  const sortedMeetings = [...unrespondedMeetings, ...upcomingMeetings].sort((a, b) => (a.start || "").localeCompare(b.start || ""));
+
+  queueCounts["meetings"] = meetingStore.items.length;
   queueCounts["pending"] = queue.pending.length;
   queueCounts["blocked"] = queue.blocked.length;
   queueCounts["threads"] = visibleThreadStore.items.length;
@@ -230,6 +276,8 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
   const threadRows = [...(visibleThreadStore.items || [])].sort((a, b) =>
     String(b.lastTime || "").localeCompare(String(a.lastTime || ""))
   ).map((thread) => renderSidebarThreadRow(thread, labels, analysisByThreadId.get(thread.threadId), busyKind)).join("");
+
+  const meetingRows = sortedMeetings.map((m) => renderSidebarMeetingRow(m, labels)).join("");
 
   const statusText = isBusy
     ? `<span class="sb-status-dot busy"></span> ${escapeHtml(busyKind)}`
@@ -432,6 +480,12 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
   .sb-timeline-body { font-size: 12px; white-space: pre-wrap; margin-top: 2px; opacity: 0.8; }
   .sb-analysis { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--vscode-sideBarSectionHeader-border, rgba(128,128,128,0.15)); }
 
+  /* ── Meeting status badges ── */
+  .sb-mtg-warn { background: var(--vscode-editorWarning-foreground, #cca700); color: #000; }
+  .sb-mtg-ok { background: var(--vscode-charts-green, #4ec9b0); color: #000; }
+  .sb-mtg-tentative { background: var(--vscode-badge-background, #4d4d4d); }
+  .sb-mtg-dim { opacity: 0.5; }
+
   /* ── Draft box ── */
   .draft-box { position: relative; margin-top: 6px; }
   .draft-box pre { margin: 0; padding: 6px 36px 6px 8px; font-size: 11px; white-space: pre-wrap; background: var(--vscode-textBlockQuote-background, rgba(128,128,128,0.1)); border-radius: 4px; }
@@ -551,6 +605,7 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
       ${queueNav}
     </div>
     <div class="sb-list-area" id="itemList">
+      ${meetingRows}
       ${pendingRows}
       ${blockedRows}
       ${analysisRows}
@@ -707,6 +762,7 @@ document.addEventListener('click', function(event) {
   if (action === 'openInOutlook') post('openInOutlook', { mailId: target.getAttribute('data-mail-id') || '' });
   if (action === 'analyzeThread') post('analyzeThread', { threadId: target.getAttribute('data-thread-id') || '' });
   if (action === 'openInWorkbench') post('openInWorkbench', { mailId: target.getAttribute('data-mail-id') || '' });
+  if (action === 'openMeetingInOutlook') post('openMeetingInOutlook', { meetingId: target.getAttribute('data-meeting-id') || '' });
 });
 </script>
 </body>

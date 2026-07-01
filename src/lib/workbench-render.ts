@@ -12,14 +12,16 @@ import type { SecurityGateDecisionResult } from "./security-types";
 import { emptyThreadStore, type ThreadStore } from "./thread-store";
 import type { ThreadAnalysisResult } from "./thread-analysis-schema";
 import { renderButtonSpinner, formatClassification, formatThreadSecurity, formatPriority, renderDraftBox, type DashboardRenderInput } from "./dashboard-render";
+import { emptyMeetingStore, type StoredMeeting } from "./meeting-store";
 
 const QUEUE_ORDER = [
-  "pending", "blocked",
+  "meetings", "pending", "blocked",
   "mustHandleToday", "risk", "waitingForMe", "followUp",
   "importantSender", "notice", "threads", "ignored", "uncertain"
 ] as const;
 
 function queueLabel(queueId: string, labels: DashboardLabels, categoryLabels: Record<string, string>): string {
+  if (queueId === "meetings") return labels.meetings.title;
   if (queueId === "pending") return labels.pending.title;
   if (queueId === "blocked") return labels.pending.blockedTitle;
   if (queueId === "threads") return labels.threads.title;
@@ -126,6 +128,41 @@ function renderThreadDetail(
   </div>`;
 }
 
+function meetingStatusLabel(status: string, labels: DashboardLabels): string {
+  const map: Record<string, string> = {
+    notResponded: labels.meetings.notResponded,
+    accepted: labels.meetings.accepted,
+    tentative: labels.meetings.tentative,
+    declined: labels.meetings.declined,
+    organizer: labels.meetings.organizer_status
+  };
+  return map[status] || map["notResponded"]!;
+}
+
+function renderMeetingDetail(item: StoredMeeting, labels: DashboardLabels): string {
+  const timeRange = `${item.start || "-"} — ${item.end || "-"}`;
+  const flags: string[] = [];
+  if (item.isAllDay) flags.push(labels.meetings.allDay);
+  if (item.isRecurring) flags.push(labels.meetings.recurring);
+  return `<div class="wb-detail-card">
+    <div class="wb-detail-header">
+      <h3>${escapeHtml(item.subject || "-")}</h3>
+      <span class="wb-priority wb-mtg-${escapeAttr(item.responseStatus)}">${escapeHtml(meetingStatusLabel(item.responseStatus, labels))}</span>
+    </div>
+    <div class="wb-meta-grid">
+      <div class="wb-field"><strong>${escapeHtml(labels.meetings.organizer)}:</strong> ${escapeHtml(item.organizer || "-")}</div>
+      <div class="wb-field"><strong>${escapeHtml(labels.meetings.time)}:</strong> ${escapeHtml(timeRange)}</div>
+      ${item.location ? `<div class="wb-field"><strong>${escapeHtml(labels.meetings.location)}:</strong> ${escapeHtml(item.location)}</div>` : ""}
+      ${item.requiredAttendees ? `<div class="wb-field"><strong>${escapeHtml(labels.meetings.attendees)}:</strong> ${escapeHtml(item.requiredAttendees)}</div>` : ""}
+      ${flags.length ? `<div class="wb-field">${escapeHtml(flags.join(", "))}</div>` : ""}
+    </div>
+    ${item.bodyExcerpt ? `<div class="wb-body">${escapeHtml(item.bodyExcerpt)}</div>` : ""}
+    <div class="wb-actions">
+      <button class="wb-btn" data-action="openMeetingInOutlook" data-meeting-id="${escapeAttr(item.entryId)}">${escapeHtml(labels.meetings.openInOutlook)}</button>
+    </div>
+  </div>`;
+}
+
 export function renderWorkbenchHtml(input: DashboardRenderInput): string {
   const { state, store, availableModels, busyKind, isBusy } = input;
   const config = state.config as Record<string, unknown>;
@@ -147,8 +184,16 @@ export function renderWorkbenchHtml(input: DashboardRenderInput): string {
   const analysisDisabled = canAnalyze && !isBusy ? "" : " disabled";
   const analysisByThreadId = new Map((threadAnalysis.items || []).map((item) => [item.threadId, item]));
 
+  const meetingStore = input.meetingStore || emptyMeetingStore();
+  const sortedMeetings = [...meetingStore.items].sort((a, b) => {
+    if (a.responseStatus === "notResponded" && b.responseStatus !== "notResponded") return -1;
+    if (a.responseStatus !== "notResponded" && b.responseStatus === "notResponded") return 1;
+    return (a.start || "").localeCompare(b.start || "");
+  });
+
   const queueCounts: Record<string, number> = {};
   for (const cat of state.categories) { queueCounts[cat.id] = cat.items.length; }
+  queueCounts["meetings"] = meetingStore.items.length;
   queueCounts["pending"] = queue.pending.length;
   queueCounts["blocked"] = queue.blocked.length;
   queueCounts["threads"] = visibleThreadStore.items.length;
@@ -205,6 +250,15 @@ export function renderWorkbenchHtml(input: DashboardRenderInput): string {
       <div class="wb-item-from">${escapeHtml(item.from || "")}</div>
     </div>`);
     detailData.push(`<div class="wb-reader" data-id="${escapeAttr(item.mailId)}">${renderMailDetail(item, "ignored", labels, "")}</div>`);
+  }
+
+  for (const mtg of sortedMeetings) {
+    const statusLabel = meetingStatusLabel(mtg.responseStatus, labels);
+    listData.push(`<div class="wb-item" data-queue="meetings" data-id="${escapeAttr(mtg.entryId)}" onclick="selectItem(this)">
+      <div class="wb-item-subject">${escapeHtml(mtg.subject || "-")}</div>
+      <div class="wb-item-line2"><span class="wb-item-from">${escapeHtml(mtg.start || "")}</span><span class="wb-item-badge wb-mtg-${escapeAttr(mtg.responseStatus)}">${escapeHtml(statusLabel)}</span></div>
+    </div>`);
+    detailData.push(`<div class="wb-reader" data-id="${escapeAttr(mtg.entryId)}">${renderMeetingDetail(mtg, labels)}</div>`);
   }
 
   const sortedThreads = [...(visibleThreadStore.items || [])].sort((a, b) => String(b.lastTime || "").localeCompare(String(a.lastTime || "")));
@@ -354,6 +408,12 @@ export function renderWorkbenchHtml(input: DashboardRenderInput): string {
   .copy-icon-button { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; padding: 0; border-radius: 4px; background: var(--vscode-button-secondaryBackground, #3a3d41); color: var(--vscode-button-secondaryForeground, #fff); border: none; }
   .copy-icon { position: relative; display: inline-block; width: 12px; height: 14px; border: 1.5px solid currentColor; border-radius: 1px; box-sizing: border-box; }
   .copy-icon::before { content: ""; position: absolute; width: 12px; height: 14px; left: -5px; top: 3px; border: 1.5px solid currentColor; border-radius: 1px; background: var(--vscode-button-secondaryBackground, #3a3d41); box-sizing: border-box; }
+
+  /* Meeting status */
+  .wb-mtg-notResponded { background: var(--vscode-editorWarning-foreground, #cca700); color: #000; }
+  .wb-mtg-accepted, .wb-mtg-organizer { background: var(--vscode-charts-green, #4ec9b0); color: #000; }
+  .wb-mtg-tentative { background: var(--vscode-badge-background, #4d4d4d); }
+  .wb-mtg-declined { opacity: 0.5; }
 </style>
 </head>
 <body>
@@ -451,6 +511,7 @@ document.addEventListener('click', function(e) {
   if (a === 'unignore') post('unignore', { mailId: t.getAttribute('data-mail-id') || '' });
   if (a === 'openInOutlook') post('openInOutlook', { mailId: t.getAttribute('data-mail-id') || '' });
   if (a === 'analyzeThread') post('analyzeThread', { threadId: t.getAttribute('data-thread-id') || '' });
+  if (a === 'openMeetingInOutlook') post('openMeetingInOutlook', { meetingId: t.getAttribute('data-meeting-id') || '' });
 });
 </script>
 </body>

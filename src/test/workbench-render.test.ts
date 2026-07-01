@@ -5,6 +5,7 @@ import { normalizeClassificationCache } from "../lib/classification";
 import { normalizePromptConfig } from "../lib/prompt-config";
 import { emptyMailStore, emptyMailIndex, type StoredMail } from "../lib/mail-store";
 import { emptyThreadStore } from "../lib/thread-store";
+import type { StoredMeeting as StoredMeetingItem } from "../lib/meeting-store";
 import type { DashboardRenderInput } from "../lib/dashboard-render";
 import type { DashboardState } from "../lib/dashboard-state";
 import type { AnalysisItem } from "../lib/analysis-schema";
@@ -157,5 +158,22 @@ describe("renderWorkbenchHtml", () => {
     assert.ok(html.includes('data-action="unignore"'));
     assert.ok(html.includes("Restore"));
     assert.ok(!html.includes('data-action="ignore" data-mail-id="ig1"'));
+  });
+
+  it("renders meeting items in meetings queue", () => {
+    const mtg: StoredMeetingItem = {
+      meetingId: "mtg-1", entryId: "e-mtg-1", subject: "Standup", organizer: "Alice",
+      start: "2026-07-01 09:00", end: "2026-07-01 09:30", location: "Room A",
+      isAllDay: false, isRecurring: false, requiredAttendees: "bob@test.com",
+      optionalAttendees: "", responseStatus: "notResponded", meetingSource: "calendar",
+      importance: "Normal", bodyExcerpt: "", pulledAt: "2026-07-01"
+    };
+    const input = stubInput({ meetingStore: { generatedAt: "", lastPullAt: "", items: [mtg] } });
+    const html = renderWorkbenchHtml(input);
+    assert.ok(html.includes('data-queue="meetings"'));
+    assert.ok(html.includes("Standup"));
+    assert.ok(html.includes("Alice"));
+    assert.ok(html.includes("openMeetingInOutlook"));
+    assert.ok(html.includes("wb-mtg-notResponded"));
   });
 });

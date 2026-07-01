@@ -39,6 +39,7 @@ export type DashboardLabels = {
   card: Record<"from" | "received" | "summary" | "reason" | "suggestedAction" | "copyDraft" | "ignore" | "restore" | "openInOutlook" | "noItems" | "thread", string>;
   pending: Record<"title" | "blockedTitle" | "classification" | "autoAllowed" | "manualRequired" | "gateBlocked" | "securityReason" | "select", string>;
   threads: Record<"title" | "participants" | "messages" | "lastTime" | "folders" | "contentStatus" | "security" | "analysis" | "analyzeThread" | "currentStatus" | "actionItems" | "risks" | "draftReply" | "timeline" | "attachments" | "mailIds", string>;
+  meetings: Record<"title" | "organizer" | "time" | "location" | "attendees" | "status" | "allDay" | "recurring" | "openInOutlook" | "notResponded" | "accepted" | "tentative" | "declined" | "organizer_status", string>;
   progress: Record<"pullMail" | "loadMore" | "sampleDigest" | "analyze" | "reports" | "loadModels" | "translate", string> & { detail: string };
   model: Record<"fallback" | "preferred", string>;
 };
@@ -163,6 +164,22 @@ export const LABELS: Record<Locale, DashboardLabels> = {
       timeline: "时间线",
       attachments: "附件",
       mailIds: "邮件 ID"
+    },
+    meetings: {
+      title: "会议",
+      organizer: "组织者",
+      time: "时间",
+      location: "地点",
+      attendees: "参会人",
+      status: "出席状态",
+      allDay: "全天",
+      recurring: "周期性",
+      openInOutlook: "在 Outlook 打开",
+      notResponded: "未回复",
+      accepted: "已接受",
+      tentative: "暂定",
+      declined: "已拒绝",
+      organizer_status: "组织者"
     },
     progress: {
       pullMail: "正在获取新邮件",
@@ -298,6 +315,22 @@ export const LABELS: Record<Locale, DashboardLabels> = {
       timeline: "Timeline",
       attachments: "Attachments",
       mailIds: "Mail IDs"
+    },
+    meetings: {
+      title: "Meetings",
+      organizer: "Organizer",
+      time: "Time",
+      location: "Location",
+      attendees: "Attendees",
+      status: "Status",
+      allDay: "All Day",
+      recurring: "Recurring",
+      openInOutlook: "Open in Outlook",
+      notResponded: "Not Responded",
+      accepted: "Accepted",
+      tentative: "Tentative",
+      declined: "Declined",
+      organizer_status: "Organizer"
     },
     progress: {
       pullMail: "Fetching new mail",

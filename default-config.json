@@ -15,5 +15,6 @@
   "mailStoreRetentionDays": 1,
   "mailIndexRetentionDays": 7,
   "analysisRetentionDays": 7,
-  "importantSenders": []
+  "importantSenders": [],
+  "meetingDaysAhead": 2
 }

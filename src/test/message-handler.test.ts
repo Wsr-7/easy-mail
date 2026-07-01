@@ -16,6 +16,7 @@ function stubContext(overrides?: Partial<MessageHandlerContext>): MessageHandler
     readIgnoredIds: mock.fn(async () => []),
     writeIgnoredIds: mock.fn(async () => {}),
     openMailInOutlook: mock.fn(async () => {}),
+    openMeetingInOutlook: mock.fn(async () => {}),
     openGuide: mock.fn(async () => {}),
     openDigest: mock.fn(async () => {}),
     openSummary: mock.fn(async () => {}),
@@ -117,6 +118,13 @@ describe("handleWebviewMessage", () => {
     await handleWebviewMessage(ctx, { type: "openInWorkbench", mailId: "m-42" });
     assert.equal((ctx.openWorkbench as any).mock.callCount(), 1);
     assert.deepEqual((ctx.openWorkbench as any).mock.calls[0].arguments, ["m-42"]);
+  });
+
+  it("dispatches openMeetingInOutlook with meetingId", async () => {
+    const ctx = stubContext();
+    await handleWebviewMessage(ctx, { type: "openMeetingInOutlook", meetingId: "mtg-99" });
+    assert.equal((ctx.openMeetingInOutlook as any).mock.callCount(), 1);
+    assert.deepEqual((ctx.openMeetingInOutlook as any).mock.calls[0].arguments, ["mtg-99"]);
   });
 
   it("dispatches requestLanguageChange", async () => {

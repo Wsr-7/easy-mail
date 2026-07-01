@@ -10,6 +10,7 @@ import { normalizeThreadAnalysis, type ThreadAnalysisResult } from "./thread-ana
 import { buildThreadStore } from "./thread-engine";
 import { emptyThreadStore, mergeThreadStores, normalizeThreadStore, type ThreadStore } from "./thread-store";
 import { normalizeAvailableModel, type AvailableModel } from "./llm-provider";
+import { emptyMeetingStore, normalizeMeetingStore, type MeetingStore } from "./meeting-store";
 import { formatError } from "./process-runner";
 
 export interface AppPaths {
@@ -78,6 +79,14 @@ export class AppDataStore {
 
   getThreadStorePath(): string {
     return path.join(this.getDataDir(), "thread-store.json");
+  }
+
+  getMeetingStorePath(): string {
+    return path.join(this.getDataDir(), "meeting-store.json");
+  }
+
+  getMeetingDigestPath(): string {
+    return path.join(this.getDataDir(), "meeting-digest.md");
   }
 
   getClassificationCachePath(): string {
@@ -277,6 +286,21 @@ export class AppDataStore {
 
   async writeThreadStore(store: ThreadStore): Promise<void> {
     await fs.promises.writeFile(this.getThreadStorePath(), `${JSON.stringify(store, null, 2)}\n`, "utf8");
+  }
+
+  async readMeetingStore(): Promise<MeetingStore> {
+    if (!fs.existsSync(this.getMeetingStorePath())) {
+      return emptyMeetingStore();
+    }
+    try {
+      return normalizeMeetingStore(JSON.parse(await fs.promises.readFile(this.getMeetingStorePath(), "utf8")));
+    } catch {
+      return emptyMeetingStore();
+    }
+  }
+
+  async writeMeetingStore(store: MeetingStore): Promise<void> {
+    await fs.promises.writeFile(this.getMeetingStorePath(), `${JSON.stringify(store, null, 2)}\n`, "utf8");
   }
 
   async readClassificationCache(): Promise<ClassificationCache> {

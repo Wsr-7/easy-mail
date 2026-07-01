@@ -26,6 +26,8 @@ import { runProcess, formatElapsedSeconds, formatError, deleteFileIfExists, sani
 import { AppDataStore } from "./lib/app-data";
 import { DashboardProvider } from "./lib/dashboard-provider";
 import { renderWorkbenchHtml } from "./lib/workbench-render";
+import { parseMeetingDigest } from "./lib/meeting-digest";
+import { emptyMeetingStore, mergeMeetingDigestIntoStore, pruneMeetingStore, type MeetingStore } from "./lib/meeting-store";
 
 type BusyState = {
   label: string;
@@ -339,6 +341,7 @@ class EasyMailApp {
     await this.data.writeThreadStore(nextThreadStore);
     const classificationCache = ensureClassifications(prunedStore.items, await this.data.readClassificationCache());
     await this.data.writeClassificationCache(classificationCache);
+    await this.collectMeetings(config, forceSample);
     await this.log("pullMail:done", {
       digestItems: digest.items.length,
       added: merge.added,
@@ -348,6 +351,22 @@ class EasyMailApp {
       threads: nextThreadStore.items.length
     });
     return { added: merge.added, skipped: merge.skipped };
+  }
+
+  private async collectMeetings(config: Record<string, unknown>, forceSample: boolean): Promise<void> {
+    try {
+      const meetingScript = await this.findScript("collect-outlook-meetings.vbs");
+      const daysAhead = Number(config.meetingDaysAhead || 2);
+      const meetingArgs = ["//nologo", meetingScript, "--days-ahead", String(daysAhead), "--body-chars", "500", "--output", this.data.getMeetingDigestPath()];
+      if (forceSample || config.sampleMode) meetingArgs.push("--sample");
+      await runProcess("cscript.exe", meetingArgs, 30000, (event, data) => void this.log(`meeting:${event}`, data));
+      const meetingDigest = parseMeetingDigest(await fs.promises.readFile(this.data.getMeetingDigestPath(), "utf8"));
+      const meetingStore = pruneMeetingStore(mergeMeetingDigestIntoStore(await this.data.readMeetingStore(), meetingDigest));
+      await this.data.writeMeetingStore(meetingStore);
+      await this.log("meetings:done", { items: meetingStore.items.length });
+    } catch (err) {
+      await this.log("meetings:error", { error: formatError(err) });
+    }
   }
 
   public async analyze(): Promise<void> {
@@ -590,6 +609,16 @@ class EasyMailApp {
     void vscode.window.showInformationMessage("Opened mail in Outlook.");
   }
 
+  public async openMeetingInOutlook(meetingId: string): Promise<void> {
+    if (!meetingId) return;
+    const scriptPath = await this.findScript("open-outlook-mail.vbs");
+    const args = ["//nologo", scriptPath, "--entry-id", meetingId];
+    await runProcess("cscript.exe", args, 30000, (event, data) => {
+      void this.log(`openMeetingOutlook:${event}`, data);
+    });
+    void vscode.window.showInformationMessage("Opened meeting in Outlook.");
+  }
+
   public async clearLocalCache(): Promise<void> {
     await this.data.writeMailStore(emptyMailStore());
     await this.data.writeMailIndex(emptyMailIndex());
@@ -601,6 +630,7 @@ class EasyMailApp {
     await deleteFileIfExists(this.data.getDailyBriefPath());
     await deleteFileIfExists(this.data.getThreadReportPath());
     await deleteFileIfExists(this.data.getSingleMailReportPath());
+    await this.data.writeMeetingStore(emptyMeetingStore());
     await this.refresh();
     await vscode.window.showInformationMessage("Local email cache cleared.");
   }
@@ -613,6 +643,7 @@ class EasyMailApp {
     await this.data.writeIgnoredIds([]);
     await fs.promises.writeFile(this.data.getAnalysisPath(), `${JSON.stringify({ generatedAt: "", overview: { totalMails: 0, mustHandleToday: 0, risks: 0, waitingForMe: 0, notices: 0 }, items: [] }, null, 2)}\n`, "utf8");
     await this.data.writeThreadAnalysisResult({ generatedAt: "", overview: { totalThreads: 0, mustHandleToday: 0, risks: 0, waitingForMe: 0, notices: 0 }, items: [] });
+    await this.data.writeMeetingStore(emptyMeetingStore());
     await this.log("sample:reset", {});
   }
 
@@ -804,6 +835,7 @@ class EasyMailApp {
       promptConfig?: PromptConfig;
       threadStore?: ThreadStore;
       threadAnalysis?: ThreadAnalysisResult;
+      meetingStore?: MeetingStore;
     };
     state.modelInfo = await this.data.readModelInfo();
     state.store = store;
@@ -814,6 +846,7 @@ class EasyMailApp {
     state.promptConfig = promptConfig;
     state.threadStore = securedThreadStore;
     state.threadAnalysis = threadAnalysis;
+    state.meetingStore = pruneMeetingStore(await this.data.readMeetingStore());
     return state;
   }
 
@@ -834,6 +867,7 @@ class EasyMailApp {
       readIgnoredIds: () => this.data.readIgnoredIds(),
       writeIgnoredIds: (ids) => this.data.writeIgnoredIds(ids),
       openMailInOutlook: (mailId) => this.openMailInOutlook(mailId),
+      openMeetingInOutlook: (meetingId) => this.openMeetingInOutlook(meetingId),
       openGuide: () => this.openGuide(),
       openDigest: () => this.openDigest(),
       openSummary: () => this.openSummary(),

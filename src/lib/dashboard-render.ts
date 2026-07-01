@@ -12,6 +12,7 @@ import { normalizeClassificationCache } from "./classification";
 import type { SecurityGateDecisionResult } from "./security-types";
 import { emptyThreadStore, type ThreadStore } from "./thread-store";
 import type { ThreadAnalysisResult } from "./thread-analysis-schema";
+import type { MeetingStore } from "./meeting-store";
 
 type SecurityDecisionMap = Map<string, SecurityGateDecisionResult>;
 
@@ -307,6 +308,7 @@ export interface DashboardRenderInput {
   promptConfig: PromptConfig;
   threadStore: ThreadStore;
   threadAnalysis: ThreadAnalysisResult;
+  meetingStore?: MeetingStore;
   availableModels: AvailableModel[];
   busyKind: string;
   isBusy: boolean;

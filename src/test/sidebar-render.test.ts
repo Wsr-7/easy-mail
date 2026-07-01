@@ -5,6 +5,7 @@ import { normalizeClassificationCache } from "../lib/classification";
 import { normalizePromptConfig } from "../lib/prompt-config";
 import { emptyMailStore, emptyMailIndex, type StoredMail } from "../lib/mail-store";
 import { emptyThreadStore } from "../lib/thread-store";
+import { emptyMeetingStore, type StoredMeeting as StoredMeetingItem } from "../lib/meeting-store";
 import type { DashboardRenderInput } from "../lib/dashboard-render";
 import type { DashboardState } from "../lib/dashboard-state";
 import type { AnalysisItem } from "../lib/analysis-schema";
@@ -247,5 +248,27 @@ describe("renderSidebarHtml", () => {
     const pendingIdx = html.indexOf('data-queue-id="pending"');
     const mustHandleIdx = html.indexOf('data-queue-id="mustHandleToday"');
     assert.ok(pendingIdx < mustHandleIdx, "pending should come before mustHandleToday");
+  });
+
+  it("renders meetings queue with meeting rows", () => {
+    const mtg: StoredMeetingItem = {
+      meetingId: "mtg-1", entryId: "e-mtg-1", subject: "Standup", organizer: "Alice",
+      start: "2026-07-01 09:00", end: "2026-07-01 09:30", location: "Room A",
+      isAllDay: false, isRecurring: true, requiredAttendees: "bob@test.com",
+      optionalAttendees: "", responseStatus: "notResponded", meetingSource: "calendar",
+      importance: "Normal", bodyExcerpt: "", pulledAt: "2026-07-01"
+    };
+    const input = stubInput({ meetingStore: { generatedAt: "", lastPullAt: "", items: [mtg] } });
+    const html = renderSidebarHtml(input);
+    assert.ok(html.includes('data-queue="meetings"'));
+    assert.ok(html.includes('data-queue-id="meetings"'));
+    assert.ok(html.includes("Standup"));
+    assert.ok(html.includes("Alice"));
+    assert.ok(html.includes("openMeetingInOutlook"));
+  });
+
+  it("shows meetings queue in nav even when empty", () => {
+    const html = renderSidebarHtml(stubInput());
+    assert.ok(html.includes('data-queue-id="meetings"'));
   });
 });
