@@ -34,9 +34,11 @@ function renderMailDetail(item: StoredMail, queue: string, labels: DashboardLabe
   </div>`;
 }
 
-function renderAnalysisDetail(item: AnalysisResult["items"][number], queue: string, labels: DashboardLabels, threadId: string): string {
+function renderAnalysisDetail(item: AnalysisResult["items"][number], queue: string, labels: DashboardLabels, threadId: string, classifications: ReturnType<typeof normalizeClassificationCache>): string {
   const priority = formatPriority(item.priority, labels);
   const draftHtml = item.draftReply ? renderDraftBox(item.draftReply) : "";
+  const classification = classificationFor(item.mailId, classifications);
+  const clsHtml = classification ? `<div class="wb-field"><strong>${escapeHtml(labels.pending.classification)}:</strong> ${escapeHtml(formatClassification(classification))}</div>` : "";
   const threadLink = threadId
     ? `<div class="wb-field"><strong>${escapeHtml(labels.card.thread)}:</strong> ${escapeHtml(threadId)}</div>`
     : "";
@@ -48,6 +50,7 @@ function renderAnalysisDetail(item: AnalysisResult["items"][number], queue: stri
     <div class="wb-meta-grid">
       <div class="wb-field"><strong>${escapeHtml(labels.card.from)}:</strong> ${escapeHtml(item.sender || "-")}</div>
       <div class="wb-field"><strong>${escapeHtml(labels.card.received)}:</strong> ${escapeHtml(item.receivedTime || "-")}</div>
+      ${clsHtml}
     </div>
     <div class="wb-section">
       <div class="wb-field"><strong>${escapeHtml(labels.card.summary)}:</strong></div>
@@ -187,7 +190,7 @@ export function renderWorkbenchHtml(input: DashboardRenderInput): string {
   for (const cat of state.categories) {
     for (const item of cat.items) {
       const threadId = threadByMailId.get(item.mailId) || "";
-      detailData.push(`<div class="wb-reader" data-id="${escapeAttr(item.mailId)}">${renderAnalysisDetail(item, cat.id, labels, threadId)}</div>`);
+      detailData.push(`<div class="wb-reader" data-id="${escapeAttr(item.mailId)}">${renderAnalysisDetail(item, cat.id, labels, threadId, classifications)}</div>`);
     }
   }
 
@@ -227,7 +230,7 @@ export function renderWorkbenchHtml(input: DashboardRenderInput): string {
   .wb-placeholder { display: flex; align-items: center; justify-content: center; height: 100%; opacity: 0.3; font-size: 14px; }
 
   /* Detail card styles */
-  .wb-detail-card { padding: 24px 28px; max-width: 960px; }
+  .wb-detail-card { padding: 24px 28px; }
   .wb-detail-card h3 { font-size: 17px; line-height: 1.4; margin-bottom: 4px; font-weight: 600; }
   .wb-detail-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
   .wb-detail-header h3 { flex: 1; }

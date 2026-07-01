@@ -354,7 +354,7 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
   .sb-line2 { display: flex; align-items: center; gap: 6px; margin-top: 1px; }
   .sb-line2-meta { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; opacity: 0.55; }
   .sb-badge { font-size: 10px; padding: 1px 6px; border-radius: 8px; white-space: nowrap; flex-shrink: 0; background: var(--vscode-badge-background, #4d4d4d); color: var(--vscode-badge-foreground, #fff); }
-  .sb-cls-badge { font-size: 9px; padding: 1px 5px; border-radius: 4px; white-space: nowrap; flex-shrink: 0; opacity: 0.6; border: 1px solid var(--vscode-widget-border, rgba(128,128,128,0.2)); color: var(--vscode-foreground, #ccc); }
+  .sb-cls-badge { font-size: 10px; padding: 1px 6px; border-radius: 4px; white-space: nowrap; flex-shrink: 0; opacity: 0.8; border: 1px solid var(--vscode-widget-border, rgba(128,128,128,0.35)); color: var(--vscode-foreground, #ccc); }
 
   /* ── Meeting status badges ── */
   .sb-mtg-warn { background: var(--vscode-editorWarning-foreground, #cca700); color: #000; }
