@@ -6,6 +6,7 @@ import { filterVisibleThreadsForDashboard } from "./dashboard-state";
 import { escapeHtml, escapeAttr, selected } from "./html-utils";
 import { selectConfiguredModel } from "./llm-provider";
 import { emptyMailIndex, folderOldestReceivedTimes, type StoredMail } from "./mail-store";
+import type { NextActionItem } from "./next-actions";
 import { normalizePromptConfig } from "./prompt-config";
 import { emptyThreadStore, type ThreadStore } from "./thread-store";
 import { renderButtonSpinner, formatPriority, formatClassification, renderModelOptions, renderRangeValueControl, renderClassificationOptions, formatAnalyzeNextLabel, type DashboardRenderInput } from "./dashboard-render";
@@ -13,6 +14,7 @@ import { emptyMeetingStore, type StoredMeeting } from "./meeting-store";
 
 const QUEUE_ORDER = [
   "meetings",
+  "nextActions",
   "pending",
   "blocked",
   "mustHandleToday",
@@ -27,13 +29,14 @@ const QUEUE_ORDER = [
 ] as const;
 
 const STABLE_QUEUES = new Set([
-  "meetings", "pending", "blocked", "mustHandleToday", "risk", "waitingForMe",
+  "meetings", "nextActions", "pending", "blocked", "mustHandleToday", "risk", "waitingForMe",
   "followUp", "importantSender", "notice", "threads", "ignored", "uncertain"
 ]);
 
 function queueIcon(queueId: string): string {
   switch (queueId) {
     case "meetings": return "📅";
+    case "nextActions": return "☐";
     case "mustHandleToday": return "!";
     case "risk": return "⚠";
     case "waitingForMe": return "←";
@@ -51,6 +54,7 @@ function queueIcon(queueId: string): string {
 
 function queueLabel(queueId: string, labels: DashboardLabels, categoryLabels: Record<string, string>): string {
   if (queueId === "meetings") return labels.meetings.title;
+  if (queueId === "nextActions") return labels.nextActions.title;
   if (queueId === "pending") return labels.pending.title;
   if (queueId === "blocked") return labels.pending.blockedTitle;
   if (queueId === "threads") return labels.threads.title;
@@ -109,6 +113,17 @@ function meetingStatusBadge(status: string, labels: DashboardLabels): string {
   return `<span class="sb-badge ${m.cls}">${escapeHtml(m.label)}</span>`;
 }
 
+function renderCompactNextActionRow(item: NextActionItem, labels: DashboardLabels): string {
+  const meta = [item.owner || "", item.deadline || ""].filter(Boolean).join(" · ");
+  const statusBtn = item.status === "open"
+    ? `<button class="sb-badge sb-action-status" data-action="markNextAction" data-action-id="${escapeAttr(item.id)}" data-status="done" onclick="event.stopPropagation();post('markNextAction',{actionId:'${escapeAttr(item.id)}',status:'done'})">${escapeHtml(labels.nextActions.markDone)}</button>`
+    : `<button class="sb-badge sb-action-status sb-mtg-dim" data-action="markNextAction" data-action-id="${escapeAttr(item.id)}" data-status="open" onclick="event.stopPropagation();post('markNextAction',{actionId:'${escapeAttr(item.id)}',status:'open'})">${escapeHtml(labels.nextActions.reopen)}</button>`;
+  return `<div class="sb-row${item.status !== "open" ? " sb-row-dim" : ""}" data-queue="nextActions" data-thread-id="${escapeAttr(item.sourceId)}" onclick="openItem('${escapeAttr(item.sourceId)}')">
+    <div class="sb-subject" title="${escapeAttr(item.task)}">${escapeHtml(item.task)}</div>
+    <div class="sb-line2"><span class="sb-line2-meta">${escapeHtml(meta)}</span>${statusBtn}</div>
+  </div>`;
+}
+
 function renderCompactMeetingRow(item: StoredMeeting, labels: DashboardLabels): string {
   const meta = [item.organizer || "", item.start || ""].filter(Boolean).join(" · ");
   return `<div class="sb-row" data-queue="meetings" data-meeting-id="${escapeAttr(item.entryId)}" onclick="openItem('${escapeAttr(item.entryId)}')">
@@ -149,7 +164,9 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
   const upcomingMeetings = meetingStore.items.filter((m) => m.responseStatus !== "notResponded");
   const sortedMeetings = [...unrespondedMeetings, ...upcomingMeetings].sort((a, b) => (a.start || "").localeCompare(b.start || ""));
 
+  const nextActionsItems = (input.nextActionsStore?.items || []).filter((a) => a.status === "open");
   queueCounts["meetings"] = meetingStore.items.length;
+  queueCounts["nextActions"] = nextActionsItems.length;
   queueCounts["pending"] = queue.pending.length;
   queueCounts["blocked"] = queue.blocked.length;
   queueCounts["threads"] = visibleThreadStore.items.length;
@@ -181,6 +198,7 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
   const threadRows = [...(visibleThreadStore.items || [])].sort((a, b) =>
     String(b.lastTime || "").localeCompare(String(a.lastTime || ""))
   ).map((thread) => renderCompactThreadRow(thread)).join("");
+  const nextActionRows = nextActionsItems.map((a) => renderCompactNextActionRow(a, labels)).join("");
   const meetingRows = sortedMeetings.map((m) => renderCompactMeetingRow(m, labels)).join("");
 
   const statusText = isBusy
@@ -356,6 +374,9 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
   .sb-badge { font-size: 10px; padding: 1px 6px; border-radius: 8px; white-space: nowrap; flex-shrink: 0; background: var(--vscode-badge-background, #4d4d4d); color: var(--vscode-badge-foreground, #fff); }
   .sb-cls-badge { font-size: 10px; padding: 1px 6px; border-radius: 4px; white-space: nowrap; flex-shrink: 0; opacity: 0.8; border: 1px solid var(--vscode-widget-border, rgba(128,128,128,0.35)); color: var(--vscode-foreground, #ccc); }
 
+  .sb-row-dim { opacity: 0.45; }
+  .sb-action-status { cursor: pointer; font-size: 10px; padding: 1px 6px; border-radius: 8px; border: none; background: var(--vscode-badge-background, #4d4d4d); color: var(--vscode-badge-foreground, #fff); }
+
   /* ── Meeting status badges ── */
   .sb-mtg-warn { background: var(--vscode-editorWarning-foreground, #cca700); color: #000; }
   .sb-mtg-ok { background: var(--vscode-charts-green, #4ec9b0); color: #000; }
@@ -479,6 +500,7 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
     </div>
     <div class="sb-list-area" id="itemList">
       ${meetingRows}
+      ${nextActionRows}
       ${pendingRows}
       ${blockedRows}
       ${analysisRows}

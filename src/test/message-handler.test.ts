@@ -39,6 +39,7 @@ function stubContext(overrides?: Partial<MessageHandlerContext>): MessageHandler
     polishDraft: mock.fn(async () => {}),
     refineDraft: mock.fn(async () => {}),
     composeOutlookMail: mock.fn(async () => {}),
+    markNextAction: mock.fn(async () => {}),
     ...overrides
   };
 }
@@ -195,6 +196,30 @@ describe("refineDraft", () => {
     const ctx = stubContext();
     await handleWebviewMessage(ctx, { type: "refineDraft", draftText: "Hello", instruction: "", itemId: "mail:m1" });
     assert.equal((ctx.refineDraft as any).mock.callCount(), 0);
+    assert.equal((ctx.showWarning as any).mock.callCount(), 1);
+  });
+});
+
+describe("markNextAction", () => {
+  it("dispatches with valid status and refreshes", async () => {
+    const ctx = stubContext();
+    await handleWebviewMessage(ctx, { type: "markNextAction", actionId: "act-1", status: "done" });
+    assert.equal((ctx.markNextAction as any).mock.callCount(), 1);
+    assert.deepEqual((ctx.markNextAction as any).mock.calls[0].arguments, ["act-1", "done"]);
+    assert.equal((ctx.refresh as any).mock.callCount(), 1);
+  });
+
+  it("warns on invalid status", async () => {
+    const ctx = stubContext();
+    await handleWebviewMessage(ctx, { type: "markNextAction", actionId: "act-1", status: "invalid" });
+    assert.equal((ctx.markNextAction as any).mock.callCount(), 0);
+    assert.equal((ctx.showWarning as any).mock.callCount(), 1);
+  });
+
+  it("warns on empty actionId", async () => {
+    const ctx = stubContext();
+    await handleWebviewMessage(ctx, { type: "markNextAction", actionId: "", status: "done" });
+    assert.equal((ctx.markNextAction as any).mock.callCount(), 0);
     assert.equal((ctx.showWarning as any).mock.callCount(), 1);
   });
 });

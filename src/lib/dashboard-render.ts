@@ -343,6 +343,7 @@ export interface DashboardRenderInput {
   threadStore: ThreadStore;
   threadAnalysis: ThreadAnalysisResult;
   meetingStore?: MeetingStore;
+  nextActionsStore?: import("./next-actions").NextActionsStore;
   availableModels: AvailableModel[];
   busyKind: string;
   isBusy: boolean;

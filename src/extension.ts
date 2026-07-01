@@ -28,6 +28,7 @@ import { DashboardProvider } from "./lib/dashboard-provider";
 import { renderWorkbenchHtml } from "./lib/workbench-render";
 import { parseMeetingDigest } from "./lib/meeting-digest";
 import { emptyMeetingStore, mergeMeetingDigestIntoStore, pruneMeetingStore, type MeetingStore } from "./lib/meeting-store";
+import { extractNextActions, mergeNextActions, updateNextActionStatus, type NextActionsStore } from "./lib/next-actions";
 
 type BusyState = {
   label: string;
@@ -464,7 +465,16 @@ class EasyMailApp {
   }
 
   private async analyzeThreadCore(threadId: string): Promise<{ subject: string }> {
-    return analyzeThreadCoreImpl(this.analysisContext(), threadId);
+    const result = await analyzeThreadCoreImpl(this.analysisContext(), threadId);
+    await this.syncNextActionsFromThreadAnalysis();
+    return result;
+  }
+
+  private async syncNextActionsFromThreadAnalysis(): Promise<void> {
+    const threadAnalysis = await this.data.readThreadAnalysisResult();
+    const incoming = threadAnalysis.items.flatMap((item) => extractNextActions(item));
+    const store = await this.data.readNextActions();
+    await this.data.writeNextActions(mergeNextActions(store, incoming));
   }
 
 
@@ -671,6 +681,13 @@ class EasyMailApp {
     }
   }
 
+  public async markNextAction(actionId: string, status: string): Promise<void> {
+    if (status !== "open" && status !== "done" && status !== "ignored") return;
+    const store = await this.data.readNextActions();
+    const updated = updateNextActionStatus(store, actionId, status as "open" | "done" | "ignored");
+    await this.data.writeNextActions(updated);
+  }
+
   public async openMeetingInOutlook(meetingId: string): Promise<void> {
     if (!meetingId) return;
     const scriptPath = await this.findScript("open-outlook-mail.vbs");
@@ -694,6 +711,7 @@ class EasyMailApp {
     await deleteFileIfExists(this.data.getSingleMailReportPath());
     await this.data.writeMeetingStore(emptyMeetingStore());
     this.workingDrafts.clear();
+    await this.data.writeNextActions({ items: [] });
     await this.refresh();
     await vscode.window.showInformationMessage("Local email cache cleared.");
   }
@@ -952,7 +970,8 @@ class EasyMailApp {
       openWorkbench: (focusId) => this.openWorkbench(focusId),
       polishDraft: (draftText, itemId) => this.polishDraft(draftText, itemId),
       refineDraft: (draftText, instruction, itemId) => this.refineDraft(draftText, instruction, itemId),
-      composeOutlookMail: (mode, draftText, itemId) => this.composeOutlookMail(mode, draftText, itemId)
+      composeOutlookMail: (mode, draftText, itemId) => this.composeOutlookMail(mode, draftText, itemId),
+      markNextAction: (actionId, status) => this.markNextAction(actionId, status)
     };
   }
 
@@ -973,6 +992,7 @@ class EasyMailApp {
       threadAnalysis?: ThreadAnalysisResult;
     };
     const availableModels = await this.data.readCachedAvailableModels(this.availableModelsCache, (event, d) => this.log(event, d));
+    const nextActionsStore = await this.data.readNextActions();
     return renderSidebarHtml({
       state,
       store: extendedState.store || emptyMailStore(),
@@ -983,6 +1003,7 @@ class EasyMailApp {
       promptConfig: extendedState.promptConfig || normalizePromptConfig({}),
       threadStore: extendedState.threadStore || emptyThreadStore(),
       threadAnalysis: extendedState.threadAnalysis || { generatedAt: "", overview: { totalThreads: 0, mustHandleToday: 0, risks: 0, waitingForMe: 0, notices: 0 }, items: [] },
+      nextActionsStore,
       availableModels,
       busyKind: this.busy?.kind || "",
       isBusy: !!this.busy

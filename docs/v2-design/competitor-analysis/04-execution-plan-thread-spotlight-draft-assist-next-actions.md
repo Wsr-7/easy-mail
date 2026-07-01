@@ -465,20 +465,20 @@ Goal:
 
 - Convert structured action items into a local task-like queue without confusing it with the existing `followUp` category.
 
-Status: [ ] Not started
+Status: [X] Done
 
 Steps:
 
-- [ ] D1. Inspect current category and thread action item usage.
-- [ ] D2. Define `NextActionItem` local type.
-- [ ] D3. Define dedupe key.
-- [ ] D4. Create local store only if needed for MVP.
-- [ ] D5. Extract from `ThreadAnalysisItem.actionItems` first.
-- [ ] D6. Add UI surface named `Next Actions`.
-- [ ] D7. Add basic statuses: `open`, `done`, `ignored`.
-- [ ] D8. Add source open behavior by reusing existing mail/thread open behavior, not new source logic.
-- [ ] D9. Add or update tests.
-- [ ] D10. Run validation.
+- [X] D1. Inspect current category and thread action item usage.
+- [X] D2. Define `NextActionItem` local type.
+- [X] D3. Define dedupe key.
+- [X] D4. Create local store only if needed for MVP.
+- [X] D5. Extract from `ThreadAnalysisItem.actionItems` first.
+- [X] D6. Add UI surface named `Next Actions`.
+- [X] D7. Add basic statuses: `open`, `done`, `ignored`.
+- [X] D8. Add source open behavior by reusing existing mail/thread open behavior, not new source logic.
+- [X] D9. Add or update tests.
+- [X] D10. Run validation.
 
 Acceptance goal:
 
@@ -1380,7 +1380,7 @@ Completion Notes:
 
 ### D1. Inspect current category and action item usage
 
-Status: [ ] Not started
+Status: [X] Done
 
 Likely files:
 
@@ -1397,16 +1397,27 @@ Acceptance criteria:
 
 Completion Notes:
 
-- Status:
+- Status: Done
 - Files inspected:
+  - `src/lib/analysis-schema.ts` — `VALID_CATEGORIES` includes `followUp`; `AnalysisItem` has `suggestedAction` (string) but no structured action items
+  - `src/lib/thread-analysis-schema.ts` — `ThreadAnalysisItem.actionItems: ThreadActionItem[]` with `{ owner, task, deadline, sourceMailId, sourceTime }`
+  - `src/lib/dashboard-render.ts` — `renderThreadAnalysisSummary` renders truncated actionItems (2 max)
+  - `src/lib/workbench-render.ts` — Thread Spotlight renders full actionItems list
+  - `src/lib/dashboard-labels.ts` — `followUp` label in categories; `actionItems` label in threads
+  - `src/lib/sidebar-render.ts` — `followUp` used in category queue ordering
+  - `src/lib/app-data.ts` — `AppDataStore` manages thread analysis via `readThreadAnalysisResult`/`writeThreadAnalysisResult`; no next-actions store exists yet
 - Findings:
-- Handover:
+  - `followUp` is a mail/thread classification category — used in `VALID_CATEGORIES`, sidebar queue, dashboard labels. It remains unchanged.
+  - `ThreadActionItem` already has `owner`, `task`, `deadline`, `sourceMailId`, `sourceTime` — these map directly to `NextActionItem` fields.
+  - ActionItems are rendered in: (1) Dashboard thread summary (truncated), (2) Workbench Spotlight (full), (3) Thread report. No standalone "task queue" view exists.
+  - For D4: MVP needs a local store (`next-actions.json`) because statuses (`open`/`done`/`ignored`) need persistence across sessions.
+- Handover: See `Handover - 2026-07-02 - Claude Opus (D1)`
 
 ---
 
 ### D2. Define NextActionItem type
 
-Status: [ ] Not started
+Status: [X] Done
 
 Suggested shape:
 
@@ -1433,15 +1444,16 @@ Acceptance criteria:
 
 Completion Notes:
 
-- Status:
-- Files changed:
-- Handover:
+- Status: Done
+- Files changed: `src/lib/next-actions.ts` (new) — `NextActionItem`, `NextActionsStore`, `NextActionStatus` types
+- Type uses `NextAction` naming. `followUp` category untouched.
+- Handover: Combined with D3-D8
 
 ---
 
 ### D3. Define dedupe key
 
-Status: [ ] Not started
+Status: [X] Done
 
 Recommended key:
 
@@ -1456,16 +1468,17 @@ Acceptance criteria:
 
 Completion Notes:
 
-- Status:
-- Dedupe behavior:
-- Tests run:
-- Handover:
+- Status: Done
+- Dedupe key: `sourceType:sourceId:normalizedTask` where normalizedTask is `task.trim().toLowerCase().replace(/\s+/g, " ")`
+- Simplified from plan: uses sourceType+sourceId+task (not sourceMailId) since task text within same thread is the primary dedup dimension
+- Tests: `nextActionDedupeKey` normalizes whitespace; `mergeNextActions` does not duplicate same action
+- Handover: Combined with D2/D4-D8
 
 ---
 
 ### D4. Decide whether MVP needs a local store
 
-Status: [ ] Not started
+Status: [X] Done
 
 Options:
 
@@ -1484,15 +1497,19 @@ Acceptance criteria:
 
 Completion Notes:
 
-- Status:
-- Decision:
-- Handover:
+- Status: Done
+- Decision: Option 2 — persistent local `next-actions.json` with status, because MVP requires `done`/`ignored` statuses
+- Retention: cleared by `Clear Local Cache`; no time-based retention for MVP
+- Files changed:
+  - `src/lib/app-data.ts` — added `getNextActionsPath`, `readNextActions`, `writeNextActions`
+  - `src/extension.ts` — added `writeNextActions({ items: [] })` to `clearLocalCache`
+- Handover: Combined with D2-D3/D5-D8
 
 ---
 
 ### D5. Extract from ThreadAnalysisItem.actionItems first
 
-Status: [ ] Not started
+Status: [X] Done
 
 Acceptance criteria:
 
@@ -1502,16 +1519,20 @@ Acceptance criteria:
 
 Completion Notes:
 
-- Status:
+- Status: Done
 - Files changed:
-- Tests run:
-- Handover:
+  - `src/lib/next-actions.ts` — `extractNextActions(ThreadAnalysisItem)` maps `actionItems` to `NextActionItem[]`
+  - `src/extension.ts` — `syncNextActionsFromThreadAnalysis` called after `analyzeThreadCore`, merges extracted actions into store
+- Single-mail `suggestedAction` is not included (thread-only for MVP)
+- Extraction preserves: owner, task, deadline, sourceMailId, sourceTime
+- Tests: `extractNextActions` tested with full items, empty tasks, empty list
+- Handover: Combined with D2-D4/D6-D8
 
 ---
 
 ### D6. Add `Next Actions` UI surface
 
-Status: [ ] Not started
+Status: [X] Done
 
 Possible locations:
 
@@ -1527,15 +1548,23 @@ Acceptance criteria:
 
 Completion Notes:
 
-- Status:
+- Status: Done
+- Location: Sidebar queue (between meetings and pending)
+- UI named "Next Actions" (en-US) / "待办事项" (zh-CN). No "Follow-up Queue" naming.
 - Files changed:
-- Handover:
+  - `src/lib/sidebar-render.ts` — added `nextActions` to `QUEUE_ORDER`, `STABLE_QUEUES`, `queueIcon`, `queueLabel`; added `renderCompactNextActionRow` showing task, owner, deadline, done/reopen button
+  - `src/lib/dashboard-labels.ts` — added `nextActions` record with title, owner, task, deadline, source, markDone, markIgnored, reopen, noActions labels
+  - `src/lib/dashboard-render.ts` — added `nextActionsStore` to `DashboardRenderInput`
+  - `src/extension.ts` — passes `nextActionsStore` to sidebar render input
+- Each row shows: task text, owner + deadline meta, Done button (open items) or Reopen button (done items)
+- Clicking a row opens source thread in workbench via existing `openItem` → `openInWorkbench`
+- Handover: Combined with D2-D5/D7-D8
 
 ---
 
 ### D7. Add basic statuses
 
-Status: [ ] Not started
+Status: [X] Done
 
 Statuses:
 
@@ -1552,16 +1581,22 @@ Acceptance criteria:
 
 Completion Notes:
 
-- Status:
+- Status: Done
 - Files changed:
-- Tests run:
-- Handover:
+  - `src/lib/next-actions.ts` — `updateNextActionStatus`, `getOpenNextActions`
+  - `src/lib/message-handler.ts` — `markNextAction` context method + handler with validation
+  - `src/extension.ts` — `markNextAction` method reads/updates/writes store
+  - `src/lib/sidebar-render.ts` — queue count shows only open items; Done/Reopen buttons toggle status
+- Status persists in `next-actions.json`
+- Sidebar queue count shows open items only; done/ignored items hidden from queue count
+- Tests: `updateNextActionStatus` marks done/ignored; `getOpenNextActions` filters; message handler tests for valid/invalid status/empty actionId
+- Handover: Combined with D2-D6/D8
 
 ---
 
 ### D8. Reuse existing source open behavior
 
-Status: [ ] Not started
+Status: [X] Done
 
 Requirement:
 
@@ -1575,15 +1610,15 @@ Acceptance criteria:
 
 Completion Notes:
 
-- Status:
-- Files changed:
-- Handover:
+- Status: Done
+- Implementation: Each next action row has `data-thread-id` set to `sourceId` (the thread ID). Clicking calls `openItem(sourceId)` which triggers `openInWorkbench` via existing sidebar JS. This reuses the existing thread open behavior — no new multi-source logic.
+- Handover: Combined with D2-D7
 
 ---
 
 ### D9. Add or update tests
 
-Status: [ ] Not started
+Status: [X] Done
 
 Recommended tests:
 
@@ -1600,15 +1635,19 @@ Acceptance criteria:
 
 Completion Notes:
 
-- Status:
+- Status: Done
 - Tests added/changed:
-- Handover:
+  - `src/test/next-actions.test.ts` (new) — 14 tests: dedupeKey (2), extractNextActions (3), mergeNextActions (3), updateNextActionStatus (2), getOpenNextActions (1), normalizeNextActionsStore (3)
+  - `src/test/message-handler.test.ts` — 3 tests for markNextAction (valid dispatch, invalid status, empty actionId)
+  - `package.json` — added `next-actions.test.js` to test script
+- `followUp` category: no naming change, no test regression. Existing `followUp` tests still pass.
+- Handover: Combined with D2-D8
 
 ---
 
 ### D10. Run validation
 
-Status: [ ] Not started
+Status: [X] Done
 
 Commands:
 
@@ -1625,10 +1664,13 @@ Acceptance criteria:
 
 Completion Notes:
 
-- Status:
+- Status: Done
 - Commands run:
-- Results:
-- Handover:
+  - `npx tsc --noEmit`: pass
+  - `npm run compile`: pass
+  - `npm test`: pass, 258 tests, 0 fail
+- Results: Full suite green (241 previous + 14 next-actions + 3 markNextAction handler)
+- Handover: See Handover - 2026-07-02 - Claude Opus (D1-D10)
 
 ---
 
@@ -1871,6 +1913,24 @@ Pre-merge challenge question:
 
 Append updates here when a coding agent starts or completes meaningful work.
 
+### Snapshot - 2026-07-02 - D10 Next Actions MVP
+
+Status:
+
+- All four milestones complete (A, B, C, D). C10 manual Outlook testing still blocked.
+
+Current recommendation:
+
+1. If classic Outlook is available, manually test C10 matrix.
+2. All plan steps are complete. Consider cross-milestone acceptance checklist review.
+
+Known caution:
+
+- Next Actions are extracted only after thread analysis (`analyzeThread`). Batch mail analysis does not produce next actions (single-mail `suggestedAction` deferred).
+- Next action rows in sidebar open the source thread in workbench. If the thread has been cleared, the open may show no data.
+
+---
+
 ### Snapshot - 2026-07-02 - C9 Outlook Compose
 
 Status:
@@ -1987,6 +2047,42 @@ Known caution:
 
 ## 9. Handover Log
 
+#### Handover - 2026-07-02 - Claude Opus (D1-D10)
+
+Status: Done — Milestone D complete
+
+Changed:
+- D1: Inspected `followUp` category (unchanged) and `ThreadActionItem` schema
+- D2: Created `src/lib/next-actions.ts` with `NextActionItem`, `NextActionsStore`, `NextActionStatus` types
+- D3: Dedupe key = `sourceType:sourceId:normalizedTask`
+- D4: Local store at `next-actions.json` via `AppDataStore.readNextActions`/`writeNextActions`
+- D5: `extractNextActions(ThreadAnalysisItem)` maps action items; `syncNextActionsFromThreadAnalysis` runs after each thread analysis
+- D6: Sidebar queue "Next Actions" / "待办事项" with compact rows showing task, owner, deadline, status button
+- D7: `open`/`done`/`ignored` statuses; `markNextAction` in message handler + extension; sidebar shows Done/Reopen buttons
+- D8: Row click opens source thread via existing `openItem` → `openInWorkbench`
+- D9: 14 tests in `next-actions.test.ts` + 3 tests in `message-handler.test.ts`
+- D10: 258 tests pass, compile clean
+
+Validated:
+- `npm run compile`: pass
+- `npm test`: 258 pass, 0 fail
+
+Known issues:
+- Next actions extracted only from thread analysis, not batch mail analysis
+- Sidebar queue count shows only open items; done/ignored items not shown in sidebar
+
+Last safe stopping point:
+- All milestones A-D complete.
+
+Uncommitted changes / dirty files:
+- See git status below (will be committed)
+
+Next recommended step:
+- Review cross-milestone acceptance checklist
+- Manually test C10 if Outlook available
+
+---
+
 #### Handover - 2026-07-02 - Claude Opus (C1-C9)
 
 Status: Done — Milestone C implementation complete (manual testing blocked)
@@ -2013,7 +2109,9 @@ Last safe stopping point:
 - C1-C9 complete. C10 blocked on manual testing.
 
 Uncommitted changes / dirty files:
-- All Milestone C source files (see git status)
+- None — committed as `93ee4a0`
+
+Commit: `93ee4a002d45fbb949eabb57853d43e6fe49530f`
 
 Next recommended step:
 - Start `Milestone D: Next Actions MVP` at `D1`, or manually test C10 if Outlook is available.

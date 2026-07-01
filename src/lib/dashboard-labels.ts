@@ -40,6 +40,7 @@ export type DashboardLabels = {
   pending: Record<"title" | "blockedTitle" | "classification" | "autoAllowed" | "manualRequired" | "gateBlocked" | "securityReason" | "select", string>;
   threads: Record<"title" | "participants" | "messages" | "lastTime" | "folders" | "contentStatus" | "security" | "analysis" | "analyzeThread" | "spotlight" | "currentStatus" | "keyDecisions" | "openQuestions" | "actionItems" | "waitingOn" | "risks" | "needMyReply" | "suggestedAction" | "partialContext" | "yes" | "no" | "draftReply" | "timeline" | "attachments" | "mailIds", string>;
   meetings: Record<"title" | "organizer" | "time" | "location" | "attendees" | "status" | "allDay" | "recurring" | "openInOutlook" | "notResponded" | "accepted" | "tentative" | "declined" | "organizer_status", string>;
+  nextActions: Record<"title" | "owner" | "task" | "deadline" | "source" | "markDone" | "markIgnored" | "reopen" | "noActions", string>;
   progress: Record<"pullMail" | "loadMore" | "sampleDigest" | "analyze" | "reports" | "loadModels" | "translate", string> & { detail: string };
   model: Record<"fallback" | "preferred", string>;
 };
@@ -196,6 +197,17 @@ export const LABELS: Record<Locale, DashboardLabels> = {
       tentative: "暂定",
       declined: "已拒绝",
       organizer_status: "组织者"
+    },
+    nextActions: {
+      title: "待办事项",
+      owner: "负责人",
+      task: "任务",
+      deadline: "截止日期",
+      source: "来源",
+      markDone: "完成",
+      markIgnored: "忽略",
+      reopen: "重新打开",
+      noActions: "暂无待办",
     },
     progress: {
       pullMail: "正在获取新邮件",
@@ -363,6 +375,17 @@ export const LABELS: Record<Locale, DashboardLabels> = {
       tentative: "Tentative",
       declined: "Declined",
       organizer_status: "Organizer"
+    },
+    nextActions: {
+      title: "Next Actions",
+      owner: "Owner",
+      task: "Task",
+      deadline: "Deadline",
+      source: "Source",
+      markDone: "Done",
+      markIgnored: "Ignore",
+      reopen: "Reopen",
+      noActions: "No actions",
     },
     progress: {
       pullMail: "Fetching new mail",

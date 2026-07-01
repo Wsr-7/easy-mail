@@ -6,6 +6,7 @@ import { parseDigest } from "./digest";
 import { emptyMailIndex, emptyMailStore, mergeDigestIntoStore, normalizeMailIndex, normalizeMailStore, type MailIndex, type MailStore } from "./mail-store";
 import { allowedCategoryIds, normalizePromptConfig, type PromptConfig } from "./prompt-config";
 import { LEGACY_REPLY_TEMPLATE_FILE_NAME, REPLY_TEMPLATE_FILE_NAME, validateReplyTemplate } from "./reply-template";
+import { normalizeNextActionsStore, type NextActionsStore } from "./next-actions";
 import { normalizeThreadAnalysis, type ThreadAnalysisResult } from "./thread-analysis-schema";
 import { buildThreadStore } from "./thread-engine";
 import { emptyThreadStore, mergeThreadStores, normalizeThreadStore, type ThreadStore } from "./thread-store";
@@ -91,6 +92,10 @@ export class AppDataStore {
 
   getClassificationCachePath(): string {
     return path.join(this.getDataDir(), "classification-cache.json");
+  }
+
+  getNextActionsPath(): string {
+    return path.join(this.getDataDir(), "next-actions.json");
   }
 
   getPromptConfigPath(): string {
@@ -325,6 +330,21 @@ export class AppDataStore {
     } catch {
       return normalizePromptConfig({});
     }
+  }
+
+  async readNextActions(): Promise<NextActionsStore> {
+    if (!fs.existsSync(this.getNextActionsPath())) {
+      return { items: [] };
+    }
+    try {
+      return normalizeNextActionsStore(JSON.parse(await fs.promises.readFile(this.getNextActionsPath(), "utf8")));
+    } catch {
+      return { items: [] };
+    }
+  }
+
+  async writeNextActions(store: NextActionsStore): Promise<void> {
+    await fs.promises.writeFile(this.getNextActionsPath(), `${JSON.stringify(store, null, 2)}\n`, "utf8");
   }
 
   async importDigestIfStoreMissing(): Promise<void> {

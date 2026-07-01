@@ -36,6 +36,7 @@ export interface MessageHandlerContext {
   polishDraft: (draftText: string, itemId: string) => Promise<void>;
   refineDraft: (draftText: string, instruction: string, itemId: string) => Promise<void>;
   composeOutlookMail: (mode: string, draftText: string, itemId: string) => Promise<void>;
+  markNextAction: (actionId: string, status: string) => Promise<void>;
 }
 
 export async function handleWebviewMessage(ctx: MessageHandlerContext, message: unknown): Promise<void> {
@@ -43,7 +44,7 @@ export async function handleWebviewMessage(ctx: MessageHandlerContext, message: 
     return;
   }
 
-  const typed = message as { type?: string; draftReply?: string; draftText?: string; instruction?: string; itemId?: string; mode?: string; mailId?: string; mailIds?: string[]; threadId?: string; meetingId?: string; config?: unknown; silent?: boolean };
+  const typed = message as { type?: string; draftReply?: string; draftText?: string; instruction?: string; itemId?: string; mode?: string; actionId?: string; status?: string; mailId?: string; mailIds?: string[]; threadId?: string; meetingId?: string; config?: unknown; silent?: boolean };
   await ctx.log("message:received", {
     type: typed.type || "",
     mailId: typed.mailId || "",
@@ -93,6 +94,18 @@ export async function handleWebviewMessage(ctx: MessageHandlerContext, message: 
       return;
     }
     await ctx.composeOutlookMail(mode, String(typed.draftText || ""), String(typed.itemId || ""));
+    return;
+  }
+
+  if (typed.type === "markNextAction") {
+    const actionId = String(typed.actionId || "");
+    const status = String(typed.status || "");
+    if (!actionId || (status !== "open" && status !== "done" && status !== "ignored")) {
+      ctx.showWarning("Invalid action or status.");
+      return;
+    }
+    await ctx.markNextAction(actionId, status);
+    await ctx.refresh();
     return;
   }
 
