@@ -72,12 +72,11 @@ describe("renderWorkbenchHtml", () => {
     assert.ok(html.includes("wb-tabs"));
   });
 
-  it("renders top bar with action buttons", () => {
+  it("does not render top bar action buttons (actions live in sidebar)", () => {
     const html = renderWorkbenchHtml(stubInput());
-    assert.ok(html.includes("post('pullMail')"));
-    assert.ok(html.includes("post('analyze')"));
-    assert.ok(html.includes("post('generateReports')"));
-    assert.ok(html.includes("post('refresh')"));
+    assert.ok(!html.includes("wb-bar"), "workbench should not have top action bar");
+    assert.ok(!html.includes("post('pullMail')"), "workbench should not have pullMail button");
+    assert.ok(!html.includes("post('analyze')"), "workbench should not have analyze button");
   });
 
   it("renders queue tabs for non-empty queues", () => {
@@ -137,10 +136,9 @@ describe("renderWorkbenchHtml", () => {
     assert.ok(html.includes("showReader"));
   });
 
-  it("disables buttons when busy", () => {
-    const html = renderWorkbenchHtml(stubInput({ isBusy: true, busyKind: "pullMail" }));
-    assert.ok(html.includes("disabled"));
-    assert.ok(html.includes("button-spinner"));
+  it("still renders thread analyze button with busy state", () => {
+    const html = renderWorkbenchHtml(stubInput({ isBusy: true, busyKind: "analyzeThread" }));
+    assert.ok(!html.includes("wb-bar"), "no top bar even when busy");
   });
 
   it("renders placeholder for reading pane", () => {

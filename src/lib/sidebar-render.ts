@@ -1,18 +1,14 @@
 import type { AnalysisResult } from "./analysis-schema";
-import { classificationFor } from "./classification";
-import { getLocaleFromConfig, mergeStringLists, parseFolders, positiveNumber } from "./config-utils";
+import { getLocaleFromConfig, mergeStringLists, parseFolders } from "./config-utils";
 import { getLabels, buildCategoryLabels, type DashboardLabels } from "./dashboard-labels";
-import { filterVisibleThreadsForDashboard, buildThreadLookup, compareTimelineMessagesForDisplay, type DashboardState } from "./dashboard-state";
-import { escapeHtml, escapeAttr, domIdForMail, domIdForThread, domIdForThreadMessage, domIdForCategory, selected } from "./html-utils";
-import { formatModelLabel, isSelectedModel, modelKey, selectConfiguredModel, type AvailableModel } from "./llm-provider";
-import { emptyMailIndex, emptyMailStore, folderOldestReceivedTimes, type MailIndex, type MailStore, type StoredMail } from "./mail-store";
-import { normalizePromptConfig, type PromptConfig } from "./prompt-config";
-import { normalizeClassificationCache } from "./classification";
-import type { SecurityGateDecisionResult } from "./security-types";
+import { filterVisibleThreadsForDashboard } from "./dashboard-state";
+import { escapeHtml, escapeAttr, selected } from "./html-utils";
+import { selectConfiguredModel } from "./llm-provider";
+import { emptyMailIndex, folderOldestReceivedTimes, type StoredMail } from "./mail-store";
+import { normalizePromptConfig } from "./prompt-config";
 import { emptyThreadStore, type ThreadStore } from "./thread-store";
-import type { ThreadAnalysisResult } from "./thread-analysis-schema";
-import { renderButtonSpinner, formatClassification, formatGateStatus, formatThreadSecurity, formatPriority, renderDraftBox, renderModelOptions, renderRangeValueControl, renderClassificationOptions, formatAnalyzeNextLabel, type DashboardRenderInput } from "./dashboard-render";
-import { emptyMeetingStore, type MeetingStore, type StoredMeeting } from "./meeting-store";
+import { renderButtonSpinner, formatPriority, renderModelOptions, renderRangeValueControl, renderClassificationOptions, formatAnalyzeNextLabel, type DashboardRenderInput } from "./dashboard-render";
+import { emptyMeetingStore, type StoredMeeting } from "./meeting-store";
 
 const QUEUE_ORDER = [
   "meetings",
@@ -60,99 +56,25 @@ function queueLabel(queueId: string, labels: DashboardLabels, categoryLabels: Re
   return categoryLabels[queueId] || labels.categories[queueId] || queueId;
 }
 
-function renderSidebarMailRow(item: StoredMail, queue: string, labels: DashboardLabels, extra: string, locale: string): string {
-  const wbLabel = locale === "zh-CN" ? "工作台" : "Workbench";
-  return `<div class="sb-row" data-queue="${escapeAttr(queue)}" data-mail-id="${escapeAttr(item.mailId)}">
-  <div class="sb-row-main" onclick="toggleRow(this)">
+function renderCompactMailRow(item: StoredMail, queue: string): string {
+  return `<div class="sb-row" data-queue="${escapeAttr(queue)}" data-mail-id="${escapeAttr(item.mailId)}" onclick="openItem('${escapeAttr(item.mailId)}')">
     <span class="sb-subject">${escapeHtml(item.subject || item.mailId)}</span>
     <span class="sb-meta">${escapeHtml(item.from || "")}</span>
-  </div>
-  <div class="sb-detail">
-    <div class="sb-field"><strong>${escapeHtml(labels.card.from)}:</strong> ${escapeHtml(item.from || "-")}</div>
-    <div class="sb-field"><strong>${escapeHtml(labels.card.received)}:</strong> ${escapeHtml(item.receivedTime || "-")}</div>
-    ${extra}
-    <div class="sb-actions">
-      <button class="sb-btn" data-action="openInOutlook" data-mail-id="${escapeAttr(item.mailId)}">${escapeHtml(labels.card.openInOutlook)}</button>
-      <button class="sb-btn ghost" data-action="openInWorkbench" data-mail-id="${escapeAttr(item.mailId)}">${escapeHtml(wbLabel)}</button>
-      ${queue === "ignored" ? `<button class="sb-btn ghost" data-action="unignore" data-mail-id="${escapeAttr(item.mailId)}">${escapeHtml(labels.card.restore)}</button>` : `<button class="sb-btn ghost" data-action="ignore" data-mail-id="${escapeAttr(item.mailId)}">${escapeHtml(labels.card.ignore)}</button>`}
-    </div>
-  </div>
-</div>`;
+  </div>`;
 }
 
-function renderSidebarAnalysisRow(
-  item: AnalysisResult["items"][number],
-  queue: string,
-  labels: DashboardLabels,
-  threadByMailId: Map<string, string>,
-  locale: string
-): string {
-  const priority = formatPriority(item.priority, labels);
-  const draftHtml = item.draftReply ? renderDraftBox(item.draftReply) : "";
-  const threadId = threadByMailId.get(item.mailId) || "";
-  const threadLink = threadId
-    ? `<div class="sb-field"><strong>${escapeHtml(labels.card.thread)}:</strong> <a href="#" onclick="showQueue('threads');return false;">${escapeHtml(threadId)}</a></div>`
-    : "";
-  const wbLabel = locale === "zh-CN" ? "工作台" : "Workbench";
-  return `<div class="sb-row" data-queue="${escapeAttr(queue)}" data-mail-id="${escapeAttr(item.mailId)}" id="${escapeAttr(domIdForMail(item.mailId))}">
-  <div class="sb-row-main" onclick="toggleRow(this)">
+function renderCompactAnalysisRow(item: AnalysisResult["items"][number], queue: string, labels: DashboardLabels): string {
+  return `<div class="sb-row" data-queue="${escapeAttr(queue)}" data-mail-id="${escapeAttr(item.mailId)}" onclick="openItem('${escapeAttr(item.mailId)}')">
     <span class="sb-subject">${escapeHtml(item.subject || item.mailId)}</span>
-    <span class="sb-badge">${escapeHtml(priority)}</span>
-  </div>
-  <div class="sb-detail">
-    <div class="sb-field"><strong>${escapeHtml(labels.card.from)}:</strong> ${escapeHtml(item.sender || "-")}</div>
-    <div class="sb-field"><strong>${escapeHtml(labels.card.received)}:</strong> ${escapeHtml(item.receivedTime || "-")}</div>
-    <div class="sb-field"><strong>${escapeHtml(labels.card.summary)}:</strong> ${escapeHtml(item.summary || "-")}</div>
-    <div class="sb-field"><strong>${escapeHtml(labels.card.reason)}:</strong> ${escapeHtml(item.reason || "-")}</div>
-    <div class="sb-field"><strong>${escapeHtml(labels.card.suggestedAction)}:</strong> ${escapeHtml(item.suggestedAction || "-")}</div>
-    ${threadLink}
-    ${draftHtml}
-    <div class="sb-actions">
-      <button class="sb-btn" data-action="openInOutlook" data-mail-id="${escapeAttr(item.mailId)}">${escapeHtml(labels.card.openInOutlook)}</button>
-      <button class="sb-btn ghost" data-action="openInWorkbench" data-mail-id="${escapeAttr(item.mailId)}">${escapeHtml(wbLabel)}</button>
-      ${queue === "ignored" ? `<button class="sb-btn ghost" data-action="unignore" data-mail-id="${escapeAttr(item.mailId)}">${escapeHtml(labels.card.restore)}</button>` : `<button class="sb-btn ghost" data-action="ignore" data-mail-id="${escapeAttr(item.mailId)}">${escapeHtml(labels.card.ignore)}</button>`}
-    </div>
-  </div>
-</div>`;
+    <span class="sb-badge">${escapeHtml(formatPriority(item.priority, labels))}</span>
+  </div>`;
 }
 
-function renderSidebarThreadRow(
-  thread: ThreadStore["items"][number],
-  labels: DashboardLabels,
-  analysis: ThreadAnalysisResult["items"][number] | undefined,
-  busyKind: string
-): string {
-  const timelineItems = [...(thread.timeline || [])].sort(compareTimelineMessagesForDisplay);
-  const timeline = timelineItems.map((msg) =>
-    `<div class="sb-timeline-item">
-      <div class="sb-timeline-head">${escapeHtml(msg.from || msg.senderEmail || "")} · ${escapeHtml(msg.receivedTime || msg.sentTime || "")}</div>
-      <div class="sb-timeline-body">${escapeHtml((msg.bodyDelta || msg.bodyPreview || "").slice(0, 120))}</div>
-    </div>`
-  ).join("");
-
-  const analysisHtml = analysis ? `
-    <div class="sb-analysis">
-      <div class="sb-field"><strong>${escapeHtml(labels.threads.currentStatus)}:</strong> ${escapeHtml(analysis.currentStatus || analysis.oneLineSummary || "-")}</div>
-      ${analysis.actionItems.length ? `<div class="sb-field"><strong>${escapeHtml(labels.threads.actionItems)}:</strong><ul class="sb-list">${analysis.actionItems.map((a) => `<li>${escapeHtml([a.owner, a.task, a.deadline].filter(Boolean).join(": "))}</li>`).join("")}</ul></div>` : ""}
-      ${analysis.draftReply ? renderDraftBox(analysis.draftReply) : ""}
-    </div>` : "";
-
-  return `<div class="sb-row" data-queue="threads" id="${escapeAttr(domIdForThread(thread.threadId))}">
-  <div class="sb-row-main" onclick="toggleRow(this)">
+function renderCompactThreadRow(thread: ThreadStore["items"][number]): string {
+  return `<div class="sb-row" data-queue="threads" data-thread-id="${escapeAttr(thread.threadId)}" onclick="openItem('${escapeAttr(thread.threadId)}')">
     <span class="sb-subject">${escapeHtml(thread.subject || thread.threadId)}</span>
     <span class="sb-badge">${escapeHtml(String(thread.messageCount))}</span>
-  </div>
-  <div class="sb-detail">
-    <div class="sb-field"><strong>${escapeHtml(labels.threads.participants)}:</strong> ${escapeHtml(thread.participants.join(", ") || "-")}</div>
-    <div class="sb-field"><strong>${escapeHtml(labels.threads.lastTime)}:</strong> ${escapeHtml(thread.lastTime || "-")}</div>
-    <div class="sb-field"><strong>${escapeHtml(labels.threads.security)}:</strong> ${escapeHtml(formatThreadSecurity(thread.security))}</div>
-    <div class="sb-actions">
-      <button class="sb-btn${busyKind === "analyzeThread" ? " is-busy" : ""}" data-action="analyzeThread" data-thread-id="${escapeAttr(thread.threadId)}"${busyKind ? " disabled" : ""}>${escapeHtml(labels.threads.analyzeThread)}${renderButtonSpinner(busyKind === "analyzeThread")}</button>
-    </div>
-    ${analysisHtml}
-    ${timelineItems.length ? `<details class="sb-timeline-details"><summary>${escapeHtml(labels.threads.timeline)} (${timelineItems.length})</summary><div class="sb-timeline">${timeline}</div></details>` : ""}
-  </div>
-</div>`;
+  </div>`;
 }
 
 function meetingStatusBadge(status: string, labels: DashboardLabels): string {
@@ -167,28 +89,11 @@ function meetingStatusBadge(status: string, labels: DashboardLabels): string {
   return `<span class="sb-badge ${m.cls}">${escapeHtml(m.label)}</span>`;
 }
 
-function renderSidebarMeetingRow(item: StoredMeeting, labels: DashboardLabels): string {
-  const timeRange = `${escapeHtml(item.start || "-")} — ${escapeHtml(item.end || "-")}`;
-  const flags: string[] = [];
-  if (item.isAllDay) flags.push(labels.meetings.allDay);
-  if (item.isRecurring) flags.push(labels.meetings.recurring);
-  const flagsHtml = flags.length ? `<span class="sb-meta">${escapeHtml(flags.join(", "))}</span>` : "";
-  return `<div class="sb-row" data-queue="meetings" data-meeting-id="${escapeAttr(item.entryId)}">
-  <div class="sb-row-main" onclick="toggleRow(this)">
+function renderCompactMeetingRow(item: StoredMeeting, labels: DashboardLabels): string {
+  return `<div class="sb-row" data-queue="meetings" data-meeting-id="${escapeAttr(item.entryId)}" onclick="openItem('${escapeAttr(item.entryId)}')">
     <span class="sb-subject">${escapeHtml(item.subject || "-")}</span>
     ${meetingStatusBadge(item.responseStatus, labels)}
-  </div>
-  <div class="sb-detail">
-    <div class="sb-field"><strong>${escapeHtml(labels.meetings.organizer)}:</strong> ${escapeHtml(item.organizer || "-")}</div>
-    <div class="sb-field"><strong>${escapeHtml(labels.meetings.time)}:</strong> ${escapeHtml(timeRange)}</div>
-    ${item.location ? `<div class="sb-field"><strong>${escapeHtml(labels.meetings.location)}:</strong> ${escapeHtml(item.location)}</div>` : ""}
-    ${item.requiredAttendees ? `<div class="sb-field"><strong>${escapeHtml(labels.meetings.attendees)}:</strong> ${escapeHtml(item.requiredAttendees)}</div>` : ""}
-    ${flagsHtml ? `<div class="sb-field">${flagsHtml}</div>` : ""}
-    <div class="sb-actions">
-      <button class="sb-btn" data-action="openMeetingInOutlook" data-meeting-id="${escapeAttr(item.entryId)}">${escapeHtml(labels.meetings.openInOutlook)}</button>
-    </div>
-  </div>
-</div>`;
+  </div>`;
 }
 
 export function renderSidebarHtml(input: DashboardRenderInput): string {
@@ -201,11 +106,7 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
   const categoryLabels = buildCategoryLabels(labels, promptConfig, locale);
   const threadStore = input.threadStore || emptyThreadStore();
   const visibleThreadStore = filterVisibleThreadsForDashboard(threadStore);
-  const threadAnalysis = input.threadAnalysis || { generatedAt: "", overview: { totalThreads: 0, mustHandleToday: 0, risks: 0, waitingForMe: 0, notices: 0 }, items: [] };
-  const threadByMailId = buildThreadLookup(visibleThreadStore);
   const queue = input.queue || { pending: [], blocked: [], analysed: [], allowed: [], ignoredPending: [] };
-  const classifications = input.classifications || normalizeClassificationCache({});
-  const securityDecisions = input.securityDecisions || new Map<string, SecurityGateDecisionResult>();
   const configuredModel = String(config.modelFamily || "");
   const canAnalyze = !!selectConfiguredModel(availableModels, configuredModel);
   const busyDisabled = isBusy ? " disabled" : "";
@@ -217,7 +118,6 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
   const pendingCount = queue.pending.length + queue.allowed.length;
   const configuredFolders = Array.isArray(config.folders) ? config.folders.map(String) : ["Inbox"];
   const hasHistoryAnchors = Object.keys(folderOldestReceivedTimes(index, configuredFolders)).length > 0;
-  const analysisByThreadId = new Map((threadAnalysis.items || []).map((item) => [item.threadId, item]));
 
   const queueCounts: Record<string, number> = {};
   for (const cat of state.categories) {
@@ -249,35 +149,16 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
     </button>`;
   }).filter(Boolean).join("");
 
-  const pendingRows = queue.pending.map((item) => {
-    const classification = classificationFor(item.mailId, classifications);
-    const gateDecision = securityDecisions.get(item.mailId);
-    const extra = `<div class="sb-field"><strong>${escapeHtml(labels.pending.classification)}:</strong> ${escapeHtml(formatClassification(classification))}</div>
-      ${gateDecision?.reasons.length ? `<div class="sb-field"><strong>${escapeHtml(labels.pending.securityReason)}:</strong> ${escapeHtml(gateDecision.reasons.join("; "))}</div>` : ""}`;
-    return renderSidebarMailRow(item, "pending", labels, extra, locale);
-  }).join("");
-
-  const blockedRows = queue.blocked.map((item) => {
-    const classification = classificationFor(item.mailId, classifications);
-    const gateDecision = securityDecisions.get(item.mailId);
-    const extra = `<div class="sb-field"><strong>${escapeHtml(labels.pending.classification)}:</strong> ${escapeHtml(formatClassification(classification))}</div>
-      <div class="sb-field sb-blocked-reason"><strong>${escapeHtml(labels.pending.gateBlocked)}:</strong> ${escapeHtml(gateDecision?.reasons.join("; ") || "-")}</div>`;
-    return renderSidebarMailRow(item, "blocked", labels, extra, locale);
-  }).join("");
-
+  const pendingRows = queue.pending.map((item) => renderCompactMailRow(item, "pending")).join("");
+  const blockedRows = queue.blocked.map((item) => renderCompactMailRow(item, "blocked")).join("");
   const analysisRows = state.categories.map((cat) =>
-    cat.items.map((item) => renderSidebarAnalysisRow(item, cat.id, labels, threadByMailId, locale)).join("")
+    cat.items.map((item) => renderCompactAnalysisRow(item, cat.id, labels)).join("")
   ).join("");
-
-  const ignoredPendingRows = (queue.ignoredPending || []).map((item) => {
-    return renderSidebarMailRow(item, "ignored", labels, "", locale);
-  }).join("");
-
+  const ignoredPendingRows = (queue.ignoredPending || []).map((item) => renderCompactMailRow(item, "ignored")).join("");
   const threadRows = [...(visibleThreadStore.items || [])].sort((a, b) =>
     String(b.lastTime || "").localeCompare(String(a.lastTime || ""))
-  ).map((thread) => renderSidebarThreadRow(thread, labels, analysisByThreadId.get(thread.threadId), busyKind)).join("");
-
-  const meetingRows = sortedMeetings.map((m) => renderSidebarMeetingRow(m, labels)).join("");
+  ).map((thread) => renderCompactThreadRow(thread)).join("");
+  const meetingRows = sortedMeetings.map((m) => renderCompactMeetingRow(m, labels)).join("");
 
   const statusText = isBusy
     ? `<span class="sb-status-dot busy"></span> ${escapeHtml(busyKind)}`
@@ -440,62 +321,21 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
 
   /* ── Item rows ── */
   .sb-list-area { padding: 4px 0; }
-  .sb-row { border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, rgba(128,128,128,0.08)); }
+  .sb-row {
+    display: flex; align-items: center; gap: 6px; padding: 6px 12px; cursor: pointer;
+    border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, rgba(128,128,128,0.08));
+  }
   .sb-row[hidden] { display: none; }
-  .sb-row-main { display: flex; align-items: center; gap: 6px; padding: 6px 12px; cursor: pointer; }
-  .sb-row-main:hover { background: var(--vscode-list-hoverBackground, var(--vscode-list-hoverBackground, rgba(128,128,128,0.08))); }
+  .sb-row:hover { background: var(--vscode-list-hoverBackground, rgba(128,128,128,0.08)); }
   .sb-subject { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
   .sb-meta { font-size: 11px; opacity: 0.55; white-space: nowrap; max-width: 100px; overflow: hidden; text-overflow: ellipsis; }
   .sb-badge { font-size: 10px; padding: 1px 6px; border-radius: 8px; white-space: nowrap; background: var(--vscode-badge-background, #4d4d4d); color: var(--vscode-badge-foreground, #fff); }
-  .sb-detail {
-    display: none; padding: 4px 12px 8px 12px; font-size: 12px;
-    border-left: 3px solid var(--vscode-focusBorder, #007fd4);
-    margin: 0 8px 4px 8px;
-    background: var(--vscode-editor-background, rgba(0,0,0,0.1));
-    border-radius: 0 4px 4px 0;
-  }
-  .sb-row.open .sb-detail { display: block; }
-  .sb-field { padding: 2px 0; line-height: 1.4; }
-  .sb-blocked-reason { color: var(--vscode-errorForeground, #f48771); }
-  .sb-actions { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
-  .sb-btn {
-    padding: 4px 10px; border-radius: 4px; font-size: 11px;
-    background: var(--vscode-button-background, #0e639c); color: var(--vscode-button-foreground, #fff);
-    display: inline-flex; align-items: center; gap: 6px;
-    border: none; transition: background 0.15s, transform 0.1s;
-  }
-  .sb-btn:hover:not(:disabled) { background: var(--vscode-button-hoverBackground, #1177bb); }
-  .sb-btn:active:not(:disabled) { transform: scale(0.96); }
-  .sb-btn:disabled { opacity: 0.35; cursor: not-allowed; }
-  .sb-btn.ghost {
-    background: transparent; color: var(--vscode-sideBar-foreground, var(--vscode-foreground, #ccc));
-    border: 1px solid var(--vscode-widget-border, rgba(128,128,128,0.15));
-  }
-  .sb-btn.ghost:hover:not(:disabled) { background: var(--vscode-list-hoverBackground, var(--vscode-widget-border, rgba(128,128,128,0.15))); }
-  .sb-btn.is-busy { gap: 6px; }
-  .sb-list { margin: 2px 0 2px 16px; padding: 0; list-style: disc; }
-  .sb-list li { padding: 1px 0; }
-
-  /* ── Thread timeline ── */
-  .sb-timeline-details summary { cursor: pointer; font-size: 11px; opacity: 0.7; margin-top: 6px; }
-  .sb-timeline { padding: 4px 0; }
-  .sb-timeline-item { padding: 4px 0 4px 8px; border-left: 2px solid var(--vscode-sideBarSectionHeader-border, rgba(128,128,128,0.3)); margin-bottom: 4px; }
-  .sb-timeline-head { font-size: 11px; opacity: 0.6; }
-  .sb-timeline-body { font-size: 12px; white-space: pre-wrap; margin-top: 2px; opacity: 0.8; }
-  .sb-analysis { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--vscode-sideBarSectionHeader-border, rgba(128,128,128,0.15)); }
 
   /* ── Meeting status badges ── */
   .sb-mtg-warn { background: var(--vscode-editorWarning-foreground, #cca700); color: #000; }
   .sb-mtg-ok { background: var(--vscode-charts-green, #4ec9b0); color: #000; }
   .sb-mtg-tentative { background: var(--vscode-badge-background, #4d4d4d); }
   .sb-mtg-dim { opacity: 0.5; }
-
-  /* ── Draft box ── */
-  .draft-box { position: relative; margin-top: 6px; }
-  .draft-box pre { margin: 0; padding: 6px 36px 6px 8px; font-size: 11px; white-space: pre-wrap; background: var(--vscode-textBlockQuote-background, rgba(128,128,128,0.1)); border-radius: 4px; }
-  .copy-icon-button { position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; padding: 0; border-radius: 4px; background: var(--vscode-button-secondaryBackground, #3a3d41); color: var(--vscode-button-secondaryForeground, #fff); border: none; }
-  .copy-icon { position: relative; display: inline-block; width: 12px; height: 14px; border: 1.5px solid currentColor; border-radius: 1px; box-sizing: border-box; }
-  .copy-icon::before { content: ""; position: absolute; width: 12px; height: 14px; left: -5px; top: 3px; border: 1.5px solid currentColor; border-radius: 1px; background: var(--vscode-button-secondaryBackground, #3a3d41); box-sizing: border-box; }
 
   /* ── Empty state ── */
   .sb-empty { padding: 20px 12px; text-align: center; opacity: 0.5; font-size: 12px; }
@@ -698,7 +538,9 @@ function applyQueue(queueId, smooth) {
   document.getElementById('emptyState').hidden = anyVisible;
 }
 
-function toggleRow(el) { el.closest('.sb-row').classList.toggle('open'); }
+function openItem(id) {
+  post('openInWorkbench', { mailId: id });
+}
 
 function toggleSettings() {
   const panel = document.getElementById('settingsPanel');
@@ -760,18 +602,6 @@ function confirmClear() {
 
 function debounce(fn, wait) { var timer; return function() { clearTimeout(timer); timer = setTimeout(fn, wait); }; }
 
-document.addEventListener('click', function(event) {
-  var target = event.target && event.target.closest ? event.target.closest('button[data-action]') : null;
-  if (!target) return;
-  var action = target.getAttribute('data-action');
-  if (action === 'copyDraft') post('copyDraft', { draftReply: target.getAttribute('data-draft-reply') || '' });
-  if (action === 'ignore') post('ignore', { mailId: target.getAttribute('data-mail-id') || '' });
-  if (action === 'unignore') post('unignore', { mailId: target.getAttribute('data-mail-id') || '' });
-  if (action === 'openInOutlook') post('openInOutlook', { mailId: target.getAttribute('data-mail-id') || '' });
-  if (action === 'analyzeThread') post('analyzeThread', { threadId: target.getAttribute('data-thread-id') || '' });
-  if (action === 'openInWorkbench') post('openInWorkbench', { mailId: target.getAttribute('data-mail-id') || '' });
-  if (action === 'openMeetingInOutlook') post('openMeetingInOutlook', { meetingId: target.getAttribute('data-meeting-id') || '' });
-});
 </script>
 </body>
 </html>`;

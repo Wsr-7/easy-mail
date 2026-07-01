@@ -1,13 +1,11 @@
 import type { AnalysisResult } from "./analysis-schema";
-import { classificationFor } from "./classification";
+import { classificationFor, normalizeClassificationCache } from "./classification";
 import { getLocaleFromConfig, mergeStringLists, parseFolders } from "./config-utils";
 import { getLabels, buildCategoryLabels, type DashboardLabels } from "./dashboard-labels";
 import { filterVisibleThreadsForDashboard, buildThreadLookup, compareTimelineMessagesForDisplay } from "./dashboard-state";
 import { escapeHtml, escapeAttr } from "./html-utils";
-import { selectConfiguredModel } from "./llm-provider";
 import type { StoredMail } from "./mail-store";
 import { normalizePromptConfig } from "./prompt-config";
-import { normalizeClassificationCache } from "./classification";
 import type { SecurityGateDecisionResult } from "./security-types";
 import { emptyThreadStore, type ThreadStore } from "./thread-store";
 import type { ThreadAnalysisResult } from "./thread-analysis-schema";
@@ -164,7 +162,7 @@ function renderMeetingDetail(item: StoredMeeting, labels: DashboardLabels): stri
 }
 
 export function renderWorkbenchHtml(input: DashboardRenderInput): string {
-  const { state, store, availableModels, busyKind, isBusy } = input;
+  const { state, busyKind } = input;
   const config = state.config as Record<string, unknown>;
   const locale = getLocaleFromConfig(config);
   const labels = getLabels(locale);
@@ -178,10 +176,6 @@ export function renderWorkbenchHtml(input: DashboardRenderInput): string {
   const queue = input.queue || { pending: [], blocked: [], analysed: [], allowed: [], ignoredPending: [] };
   const classifications = input.classifications || normalizeClassificationCache({});
   const securityDecisions = input.securityDecisions || new Map<string, SecurityGateDecisionResult>();
-  const configuredModel = String(config.modelFamily || "");
-  const canAnalyze = !!selectConfiguredModel(availableModels, configuredModel);
-  const busyDisabled = isBusy ? " disabled" : "";
-  const analysisDisabled = canAnalyze && !isBusy ? "" : " disabled";
   const analysisByThreadId = new Map((threadAnalysis.items || []).map((item) => [item.threadId, item]));
 
   const meetingStore = input.meetingStore || emptyMeetingStore();
@@ -270,10 +264,6 @@ export function renderWorkbenchHtml(input: DashboardRenderInput): string {
     detailData.push(`<div class="wb-reader" data-id="${escapeAttr(thread.threadId)}">${renderThreadDetail(thread, labels, analysisByThreadId.get(thread.threadId), busyKind)}</div>`);
   }
 
-  const statusText = isBusy
-    ? `<span class="wb-dot busy"></span> ${escapeHtml(busyKind)}`
-    : `<span class="wb-dot idle"></span> Idle`;
-
   return `<!doctype html>
 <html>
 <head>
@@ -290,32 +280,6 @@ export function renderWorkbenchHtml(input: DashboardRenderInput): string {
   }
   button { font-family: inherit; font-size: inherit; cursor: pointer; border: none; }
   a { color: var(--vscode-textLink-foreground, #3794ff); text-decoration: none; }
-
-  /* ── Top bar ── */
-  .wb-bar {
-    display: flex; align-items: center; gap: 8px;
-    padding: 5px 12px; flex-shrink: 0;
-    border-bottom: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.2));
-  }
-  .wb-status { display: flex; align-items: center; gap: 5px; font-size: 11px; opacity: 0.6; }
-  .wb-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
-  .wb-dot.idle { background: var(--vscode-charts-green, #4ec9b0); }
-  .wb-dot.busy { background: var(--vscode-charts-yellow, #cca700); animation: pulse 1.2s infinite; }
-  @keyframes pulse { 50% { opacity: 0.4; } }
-  .wb-spacer { flex: 1; }
-  .wb-act {
-    padding: 5px 14px; border-radius: 4px; font-size: 12px; font-weight: 500;
-    background: var(--vscode-button-secondaryBackground, #3a3d41);
-    color: var(--vscode-button-secondaryForeground, #fff);
-    border: 1px solid var(--vscode-widget-border, rgba(128,128,128,0.15));
-    display: inline-flex; align-items: center; gap: 5px;
-    transition: background 0.15s, transform 0.1s;
-  }
-  .wb-act:hover:not(:disabled) { background: var(--vscode-button-secondaryHoverBackground, #45494e); }
-  .wb-act:active:not(:disabled) { transform: scale(0.97); }
-  .wb-act:disabled { opacity: 0.35; cursor: not-allowed; }
-  .button-spinner { width: 10px; height: 10px; border: 2px solid var(--vscode-widget-border, rgba(128,128,128,0.3)); border-top-color: var(--vscode-foreground, #fff); border-radius: 50%; animation: spin 0.8s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
 
   /* ── Two-column layout ── */
   .wb-cols { display: flex; flex: 1; overflow: hidden; }
@@ -417,15 +381,6 @@ export function renderWorkbenchHtml(input: DashboardRenderInput): string {
 </style>
 </head>
 <body>
-  <div class="wb-bar">
-    <div class="wb-status">${statusText}</div>
-    <div class="wb-spacer"></div>
-    <button class="wb-act${busyKind === "pullMail" ? " is-busy" : ""}" onclick="post('pullMail')"${busyDisabled}>${escapeHtml(labels.toolbar.pullMail)}${renderButtonSpinner(busyKind === "pullMail")}</button>
-    <button class="wb-act${busyKind === "analyzeNext" ? " is-busy" : ""}" onclick="post('analyze')"${analysisDisabled}>${escapeHtml(locale === "zh-CN" ? "分析" : "Analyze")}${renderButtonSpinner(busyKind === "analyzeNext")}</button>
-    <button class="wb-act" onclick="post('generateReports')"${busyDisabled}>${escapeHtml(labels.toolbar.generateReports)}</button>
-    <button class="wb-act" onclick="post('refresh')"${busyDisabled}>↻</button>
-  </div>
-
   <div class="wb-cols">
     <div class="wb-left">
       <div class="wb-tabs" id="tabs">${queueTabs}</div>

@@ -123,7 +123,7 @@ describe("renderSidebarHtml", () => {
     assert.ok(html.includes("Urgent task"));
   });
 
-  it("renders thread rows", () => {
+  it("renders compact thread rows without detail", () => {
     const input = stubInput({
       threadStore: {
         generatedAt: "", lastBuiltAt: "",
@@ -142,7 +142,7 @@ describe("renderSidebarHtml", () => {
     const html = renderSidebarHtml(input);
     assert.ok(html.includes('data-queue="threads"'));
     assert.ok(html.includes("Thread Subject"));
-    assert.ok(html.includes("alice@test.com"));
+    assert.ok(!html.includes("sb-detail"), "compact rows should not have detail sections");
   });
 
   it("renders bottom bar with reports and settings", () => {
@@ -156,7 +156,7 @@ describe("renderSidebarHtml", () => {
     const html = renderSidebarHtml(stubInput());
     assert.ok(html.includes("showQueue"));
     assert.ok(html.includes("applyQueue"));
-    assert.ok(html.includes("toggleRow"));
+    assert.ok(html.includes("openItem"));
   });
 
   it("renders settings panel hidden by default", () => {
@@ -197,7 +197,7 @@ describe("renderSidebarHtml", () => {
     assert.ok(html.includes("autoSave"));
   });
 
-  it("renders restore button for ignored items instead of ignore", () => {
+  it("renders compact rows for ignored items without action buttons", () => {
     const input = stubInput({
       state: stubState({}, [
         { id: "ignored", items: [stubAnalysisItem({ mailId: "ig1", subject: "Old mail" })] },
@@ -205,8 +205,9 @@ describe("renderSidebarHtml", () => {
       ])
     });
     const html = renderSidebarHtml(input);
-    assert.ok(html.includes('data-action="unignore"'));
-    assert.ok(html.includes('data-mail-id="ig1"'));
+    assert.ok(html.includes('data-queue="ignored"'));
+    assert.ok(html.includes("Old mail"));
+    assert.ok(!html.includes('data-action="unignore"'), "compact sidebar should not have action buttons");
   });
 
   it("renders batch size selector in action bar", () => {
@@ -250,7 +251,7 @@ describe("renderSidebarHtml", () => {
     assert.ok(pendingIdx < mustHandleIdx, "pending should come before mustHandleToday");
   });
 
-  it("renders meetings queue with meeting rows", () => {
+  it("renders compact meeting rows in meetings queue", () => {
     const mtg: StoredMeetingItem = {
       meetingId: "mtg-1", entryId: "e-mtg-1", subject: "Standup", organizer: "Alice",
       start: "2026-07-01 09:00", end: "2026-07-01 09:30", location: "Room A",
@@ -263,8 +264,8 @@ describe("renderSidebarHtml", () => {
     assert.ok(html.includes('data-queue="meetings"'));
     assert.ok(html.includes('data-queue-id="meetings"'));
     assert.ok(html.includes("Standup"));
-    assert.ok(html.includes("Alice"));
-    assert.ok(html.includes("openMeetingInOutlook"));
+    assert.ok(html.includes("sb-mtg-warn"), "should show status badge");
+    assert.ok(!html.includes("sb-detail"), "compact row should not have detail section");
   });
 
   it("shows meetings queue in nav even when empty", () => {
