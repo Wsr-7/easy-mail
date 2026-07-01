@@ -36,7 +36,7 @@ export type DashboardLabels = {
   meta: Record<"range" | "folders" | "generated" | "requestedModel" | "lastUsedModel" | "lastPull" | "lastImport", string>;
   stats: Record<"pulled" | "pending" | "analysed" | "blocked" | "mustHandle" | "risk" | "waiting" | "notice" | "threads", string>;
   categories: Record<string, string>;
-  card: Record<"from" | "received" | "summary" | "reason" | "suggestedAction" | "copyDraft" | "ignore" | "restore" | "openInOutlook" | "noItems" | "thread", string>;
+  card: Record<"from" | "received" | "summary" | "reason" | "suggestedAction" | "copyDraft" | "draftHint" | "ignore" | "restore" | "openInOutlook" | "noItems" | "thread", string>;
   pending: Record<"title" | "blockedTitle" | "classification" | "autoAllowed" | "manualRequired" | "gateBlocked" | "securityReason" | "select", string>;
   threads: Record<"title" | "participants" | "messages" | "lastTime" | "folders" | "contentStatus" | "security" | "analysis" | "analyzeThread" | "spotlight" | "currentStatus" | "keyDecisions" | "openQuestions" | "actionItems" | "waitingOn" | "risks" | "needMyReply" | "suggestedAction" | "partialContext" | "yes" | "no" | "draftReply" | "timeline" | "attachments" | "mailIds", string>;
   meetings: Record<"title" | "organizer" | "time" | "location" | "attendees" | "status" | "allDay" | "recurring" | "openInOutlook" | "notResponded" | "accepted" | "tentative" | "declined" | "organizer_status", string>;
@@ -131,6 +131,7 @@ export const LABELS: Record<Locale, DashboardLabels> = {
       reason: "判断原因",
       suggestedAction: "建议动作",
       copyDraft: "复制回复草稿",
+      draftHint: "不满意？写下你自己的回复，再润色或优化。",
       ignore: "忽略",
       restore: "恢复",
       openInOutlook: "在 Outlook 打开",
@@ -291,6 +292,7 @@ export const LABELS: Record<Locale, DashboardLabels> = {
       reason: "Reason",
       suggestedAction: "Suggested Action",
       copyDraft: "Copy Draft",
+      draftHint: "Not satisfied? Draft your own reply, then refine or polish it.",
       ignore: "Ignore",
       restore: "Restore",
       openInOutlook: "Open in Outlook",

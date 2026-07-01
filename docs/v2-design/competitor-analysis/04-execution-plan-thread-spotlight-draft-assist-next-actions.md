@@ -733,7 +733,7 @@ Completion Notes:
 
 ### B1. Inspect current draft rendering and copy behavior
 
-Status: [ ] Not started
+Status: [X] Done
 
 Likely files:
 
@@ -746,11 +746,11 @@ Likely files:
 
 Tasks:
 
-- [ ] Find `renderDraftBox` or equivalent.
-- [ ] Find `copyDraft` message handler.
-- [ ] Identify how webview sends actions to extension host.
-- [ ] Identify where source mail/thread context can be retrieved for refine/polish.
-- [ ] Identify existing redaction/security gate flow to reuse.
+- [X] Find `renderDraftBox` or equivalent.
+- [X] Find `copyDraft` message handler.
+- [X] Identify how webview sends actions to extension host.
+- [X] Identify where source mail/thread context can be retrieved for refine/polish.
+- [X] Identify existing redaction/security gate flow to reuse.
 
 Acceptance criteria:
 
@@ -759,16 +759,27 @@ Acceptance criteria:
 
 Completion Notes:
 
-- Status:
+- Status: Done
 - Files inspected:
+  - `src/lib/dashboard-render.ts` (renderDraftBox at line 223, client JS at line 566)
+  - `src/lib/workbench-render.ts` (draft in mail detail line 39, thread spotlight line 117, client JS line 363)
+  - `src/lib/message-handler.ts` (copyDraft handler at line 50)
+  - `src/test/message-handler.test.ts` (copyDraft tests at line 85)
+  - `src/test/dashboard-render.test.ts` (renderDraftBox tests at line 49)
 - Findings:
-- Handover:
+  - **renderDraftBox** (`dashboard-render.ts:223`): creates `<pre>` with copy button, stores full draft in `data-draft-reply` attribute. Currently read-only.
+  - **copyDraft flow**: Client JS reads `data-draft-reply` from button → posts `{ type: "copyDraft", draftReply }` to extension → `message-handler.ts:50` calls `ctx.copyToClipboard`.
+  - **Draft surfaces**: Both Workbench single-mail detail (`renderAnalysisDetail`, line 39) and Workbench thread spotlight (`renderThreadSpotlight`, line 117). Also Dashboard thread summary and card.
+  - **B2 target**: Replace `<pre>` in `renderDraftBox` with `<textarea>`. Update client JS to read `textarea.value` instead of `data-draft-reply`. Plan says Draft Assist lives in Workbench first; Dashboard can remain read-only for now.
+  - **Context for polish/refine**: Single-mail context via `AnalysisResult.items[mailId]` + `MailStore`; thread context via `ThreadAnalysisResult.items[threadId]` + `ThreadStore`. Both accessible through `AppDataStore` in `message-handler.ts` context.
+  - **Security gate/redaction**: `app-analysis.ts` routes through `security-gate.ts` → `redaction.ts`. Polish/Refine can reuse same `sendPromptToModel` path with custom prompt.
+- Handover: See `Handover - 2026-07-02 - Claude Opus`
 
 ---
 
 ### B2. Make draft area editable
 
-Status: [ ] Not started
+Status: [X] Done
 
 Goal:
 
@@ -789,17 +800,20 @@ Acceptance criteria:
 
 Completion Notes:
 
-- Status:
+- Status: Done
 - Files changed:
-- UX notes:
-- Tests run:
-- Handover:
+  - `src/lib/dashboard-render.ts` — added `renderEditableDraftBox` function
+  - `src/lib/workbench-render.ts` — replaced `renderDraftBox` with `renderEditableDraftBox` in both single-mail detail and thread spotlight; updated client JS to read `textarea.value` for copyDraft
+  - `src/test/dashboard-render.test.ts` — added 4 tests for `renderEditableDraftBox`
+- UX notes: Workbench shows editable textarea; Dashboard keeps read-only `<pre>`. Client JS for copyDraft reads textarea value from nearest `.draft-box-editable` container, falls back to `data-draft-reply` attribute for Dashboard.
+- Tests run: `npm run compile`: pass; `npm test`: 232 pass, 0 fail
+- Handover: See `Handover - 2026-07-02 - Claude Opus (B2-B3)`
 
 ---
 
 ### B3. Add light hint text
 
-Status: [ ] Not started
+Status: [X] Done
 
 Text:
 
@@ -820,9 +834,11 @@ Acceptance criteria:
 
 Completion Notes:
 
-- Status:
+- Status: Done (combined with B2)
 - Files changed:
-- Handover:
+  - `src/lib/dashboard-render.ts` — hint added in `renderEditableDraftBox` as `<div class="draft-hint muted">`
+  - `src/lib/dashboard-labels.ts` — added `draftHint` to card labels (zh-CN and en-US)
+- Handover: See `Handover - 2026-07-02 - Claude Opus (B2-B3)`
 
 ---
 

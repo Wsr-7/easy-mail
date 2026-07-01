@@ -16,6 +16,7 @@ import {
   renderClassificationOptions,
   renderModelOptions,
   renderThreadAnalysisSummary,
+  renderEditableDraftBox,
 } from "../lib/dashboard-render";
 import { LABELS, getLabels } from "../lib/dashboard-labels";
 
@@ -290,5 +291,32 @@ describe("renderThreadAnalysisSummary", () => {
   it("hides empty openQuestions section", () => {
     const html = renderThreadAnalysisSummary(baseAnalysis, enLabels);
     assert.ok(!html.includes(enLabels.threads.openQuestions));
+  });
+});
+
+describe("renderEditableDraftBox", () => {
+  it("renders textarea with draft text", () => {
+    const html = renderEditableDraftBox("Hello draft", enLabels);
+    assert.ok(html.includes("<textarea"));
+    assert.ok(html.includes("Hello draft"));
+    assert.ok(html.includes("draft-box-editable"));
+  });
+
+  it("renders empty textarea when no draft", () => {
+    const html = renderEditableDraftBox("", enLabels);
+    assert.ok(html.includes("<textarea"));
+    assert.ok(html.includes("draft-textarea"));
+  });
+
+  it("includes copy button", () => {
+    const html = renderEditableDraftBox("text", enLabels);
+    assert.ok(html.includes("copyDraft"));
+    assert.ok(html.includes(enLabels.card.copyDraft));
+  });
+
+  it("escapes HTML in draft text", () => {
+    const html = renderEditableDraftBox("<script>alert(1)</script>", enLabels);
+    assert.ok(!html.includes("<script>alert"));
+    assert.ok(html.includes("&lt;script&gt;"));
   });
 });

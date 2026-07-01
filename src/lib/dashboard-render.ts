@@ -228,6 +228,18 @@ export function renderDraftBox(draftReply: string): string {
   return `<div class="draft-box"><pre>${escapeHtml(draft)}</pre><button class="copy-icon-button" data-action="copyDraft" data-draft-reply="${escapeAttr(draft)}" title="Copy draft" aria-label="Copy draft"><span class="copy-icon" aria-hidden="true"></span></button></div>`;
 }
 
+export function renderEditableDraftBox(draftReply: string, labels: DashboardLabels): string {
+  const draft = String(draftReply || "");
+  return `<div class="draft-box draft-box-editable">
+    <div class="wb-field"><strong>${escapeHtml(labels.threads.draftReply)}:</strong></div>
+    <textarea class="draft-textarea" rows="6">${escapeHtml(draft)}</textarea>
+    <div class="draft-hint muted">${escapeHtml(labels.card.draftHint)}</div>
+    <div class="draft-actions">
+      <button class="wb-btn" data-action="copyDraft">${escapeHtml(labels.card.copyDraft)}</button>
+    </div>
+  </div>`;
+}
+
 export function renderCard(item: AnalysisResult["items"][number], labels: DashboardLabels, threadByMailId: Map<string, string>, isIgnored = false): string {
   const threadId = threadByMailId.get(item.mailId) || "";
   const threadHtml = threadId

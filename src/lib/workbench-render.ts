@@ -8,7 +8,7 @@ import type { StoredMail } from "./mail-store";
 import type { SecurityGateDecisionResult } from "./security-types";
 import { emptyThreadStore, type ThreadStore } from "./thread-store";
 import type { ThreadAnalysisResult } from "./thread-analysis-schema";
-import { renderButtonSpinner, formatClassification, formatThreadSecurity, formatPriority, renderDraftBox, type DashboardRenderInput } from "./dashboard-render";
+import { renderButtonSpinner, formatClassification, formatThreadSecurity, formatPriority, renderDraftBox, renderEditableDraftBox, type DashboardRenderInput } from "./dashboard-render";
 import { emptyMeetingStore, type StoredMeeting } from "./meeting-store";
 
 function ignoreOrRestore(queue: string, mailId: string, labels: DashboardLabels): string {
@@ -36,7 +36,7 @@ function renderMailDetail(item: StoredMail, queue: string, labels: DashboardLabe
 
 function renderAnalysisDetail(item: AnalysisResult["items"][number], queue: string, labels: DashboardLabels, threadId: string, classifications: ReturnType<typeof normalizeClassificationCache>): string {
   const priority = formatPriority(item.priority, labels);
-  const draftHtml = item.draftReply ? renderDraftBox(item.draftReply) : "";
+  const draftHtml = renderEditableDraftBox(item.draftReply || "", labels);
   const classification = classificationFor(item.mailId, classifications);
   const clsHtml = classification ? `<div class="wb-field"><strong>${escapeHtml(labels.pending.classification)}:</strong> ${escapeHtml(formatClassification(classification))}</div>` : "";
   const threadLink = threadId
@@ -114,7 +114,7 @@ function renderThreadSpotlight(analysis: ThreadAnalysisResult["items"][number] |
       ${renderSpotlightRisks(analysis, labels)}
       <div class="wb-field"><strong>${escapeHtml(labels.threads.needMyReply)}:</strong> ${escapeHtml(analysis.needMyReply ? labels.threads.yes : labels.threads.no)}</div>
       ${analysis.suggestedAction ? `<div class="wb-field"><strong>${escapeHtml(labels.threads.suggestedAction)}:</strong></div><div class="wb-section-body">${escapeHtml(analysis.suggestedAction)}</div>` : ""}
-      ${analysis.draftReply ? renderDraftBox(analysis.draftReply) : ""}
+      ${renderEditableDraftBox(analysis.draftReply || "", labels)}
     </section>`;
 }
 
@@ -360,7 +360,7 @@ document.addEventListener('click', function(e) {
   var t = e.target && e.target.closest ? e.target.closest('button[data-action]') : null;
   if (!t) return;
   var a = t.getAttribute('data-action');
-  if (a === 'copyDraft') post('copyDraft', { draftReply: t.getAttribute('data-draft-reply') || '' });
+  if (a === 'copyDraft') { var ta = t.closest('.draft-box-editable'); var v = ta ? ta.querySelector('.draft-textarea') : null; post('copyDraft', { draftReply: v ? v.value : (t.getAttribute('data-draft-reply') || '') }); }
   if (a === 'ignore') post('ignore', { mailId: t.getAttribute('data-mail-id') || '' });
   if (a === 'unignore') post('unignore', { mailId: t.getAttribute('data-mail-id') || '' });
   if (a === 'openInOutlook') post('openInOutlook', { mailId: t.getAttribute('data-mail-id') || '' });
