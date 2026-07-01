@@ -7,7 +7,7 @@ Status: Draft for implementation
 
 ## 0. Multi-Agent Collaboration Rules
 
-This file is designed to be passed between multiple coding agents. Every agent must keep it current.
+This file is designed to be passed between multiple coding agents. Every agent must keep it current. If you are not Claude, read AGENTS.md first instead of CLAUDE.md.
 
 ### 0.1 Status Markers
 
