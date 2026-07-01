@@ -124,19 +124,35 @@ export function renderThreadAnalysisSummary(analysis: ThreadAnalysisResult["item
   if (!analysis) {
     return "";
   }
-  const actionItems = analysis.actionItems.length
-    ? `<ul>${analysis.actionItems.map((item) => `<li>${escapeHtml([item.owner, item.task, item.deadline].filter(Boolean).join(": ") || "-")}</li>`).join("")}</ul>`
-    : `<div class="empty">${escapeHtml(labels.card.noItems)}</div>`;
-  const risks = analysis.risks.length
-    ? `<ul>${analysis.risks.map((risk) => `<li>${escapeHtml(`${risk.level}: ${risk.description}`)}</li>`).join("")}</ul>`
-    : `<div class="empty">${escapeHtml(labels.card.noItems)}</div>`;
+  // ponytail: dashboard truncates to 2 items per list; workbench has full detail
+  const maxItems = 2;
+  const truncatedActions = analysis.actionItems.slice(0, maxItems);
+  const actionOverflow = analysis.actionItems.length > maxItems ? ` <span class="muted">(+${analysis.actionItems.length - maxItems})</span>` : "";
+  const actionItems = truncatedActions.length
+    ? `<ul>${truncatedActions.map((item) => `<li>${escapeHtml([item.owner, item.task, item.deadline].filter(Boolean).join(": ") || "-")}</li>`).join("")}</ul>${actionOverflow}`
+    : "";
+  const truncatedRisks = analysis.risks.slice(0, maxItems);
+  const riskOverflow = analysis.risks.length > maxItems ? ` <span class="muted">(+${analysis.risks.length - maxItems})</span>` : "";
+  const risks = truncatedRisks.length
+    ? `<ul>${truncatedRisks.map((risk) => `<li>${escapeHtml(`${risk.level}: ${risk.description}`)}</li>`).join("")}</ul>${riskOverflow}`
+    : "";
+  const truncatedQuestions = (analysis.openQuestions || []).slice(0, maxItems);
+  const questionOverflow = (analysis.openQuestions || []).length > maxItems ? ` <span class="muted">(+${(analysis.openQuestions || []).length - maxItems})</span>` : "";
+  const questions = truncatedQuestions.length
+    ? `<ul>${truncatedQuestions.map((q) => `<li>${escapeHtml(q)}</li>`).join("")}</ul>${questionOverflow}`
+    : "";
   const draft = analysis.draftReply ? renderDraftBox(analysis.draftReply) : "";
+  const needReply = analysis.needMyReply
+    ? `<div><strong>${escapeHtml(labels.threads.needMyReply)}:</strong> ${escapeHtml(labels.threads.yes)}</div>`
+    : "";
   return `<details open>
     <summary>${escapeHtml(labels.threads.analysis)} (${escapeHtml(analysis.priority)} / ${escapeHtml(analysis.category)})</summary>
     <div class="timeline">
       <div><strong>${escapeHtml(labels.threads.currentStatus)}:</strong> ${escapeHtml(analysis.currentStatus || analysis.oneLineSummary || "-")}</div>
-      <div><strong>${escapeHtml(labels.threads.actionItems)}:</strong>${actionItems}</div>
-      <div><strong>${escapeHtml(labels.threads.risks)}:</strong>${risks}</div>
+      ${needReply}
+      ${actionItems ? `<div><strong>${escapeHtml(labels.threads.actionItems)}:</strong>${actionItems}</div>` : ""}
+      ${questions ? `<div><strong>${escapeHtml(labels.threads.openQuestions)}:</strong>${questions}</div>` : ""}
+      ${risks ? `<div><strong>${escapeHtml(labels.threads.risks)}:</strong>${risks}</div>` : ""}
       ${draft ? `<div><strong>${escapeHtml(labels.threads.draftReply)}:</strong>${draft}</div>` : ""}
     </div>
   </details>`;

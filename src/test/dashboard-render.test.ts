@@ -15,6 +15,7 @@ import {
   renderRangeValueControl,
   renderClassificationOptions,
   renderModelOptions,
+  renderThreadAnalysisSummary,
 } from "../lib/dashboard-render";
 import { LABELS, getLabels } from "../lib/dashboard-labels";
 
@@ -190,5 +191,104 @@ describe("renderModelOptions", () => {
   it("returns not-loaded message when empty", () => {
     const html = renderModelOptions([], "", enLabels);
     assert.ok(html.includes(enLabels.settings.modelsNotLoaded));
+  });
+});
+
+describe("renderThreadAnalysisSummary", () => {
+  const baseAnalysis = {
+    threadId: "t1",
+    category: "followUp",
+    priority: "P1" as const,
+    subject: "Test",
+    participants: [],
+    lastTime: "",
+    oneLineSummary: "summary",
+    currentStatus: "ongoing",
+    keyDecisions: [],
+    openQuestions: [],
+    actionItems: [],
+    waitingOn: [],
+    risks: [],
+    needMyReply: false,
+    suggestedAction: "",
+    draftReply: "",
+    confidence: 0.9,
+    evidence: [],
+    needsOriginalMailCheck: false,
+    partialContext: false,
+  };
+
+  it("returns empty for undefined analysis", () => {
+    assert.equal(renderThreadAnalysisSummary(undefined, enLabels), "");
+  });
+
+  it("shows currentStatus", () => {
+    const html = renderThreadAnalysisSummary(baseAnalysis, enLabels);
+    assert.ok(html.includes("ongoing"));
+    assert.ok(html.includes(enLabels.threads.currentStatus));
+  });
+
+  it("shows needMyReply when true", () => {
+    const html = renderThreadAnalysisSummary({ ...baseAnalysis, needMyReply: true }, enLabels);
+    assert.ok(html.includes(enLabels.threads.needMyReply));
+    assert.ok(html.includes(enLabels.threads.yes));
+  });
+
+  it("hides needMyReply when false", () => {
+    const html = renderThreadAnalysisSummary({ ...baseAnalysis, needMyReply: false }, enLabels);
+    assert.ok(!html.includes(enLabels.threads.needMyReply));
+  });
+
+  it("hides empty actionItems section", () => {
+    const html = renderThreadAnalysisSummary(baseAnalysis, enLabels);
+    assert.ok(!html.includes(enLabels.threads.actionItems));
+  });
+
+  it("truncates actionItems to 2 and shows overflow", () => {
+    const items = [
+      { owner: "A", task: "t1", deadline: "", sourceMailId: "", sourceTime: "" },
+      { owner: "B", task: "t2", deadline: "", sourceMailId: "", sourceTime: "" },
+      { owner: "C", task: "t3", deadline: "", sourceMailId: "", sourceTime: "" },
+    ];
+    const html = renderThreadAnalysisSummary({ ...baseAnalysis, actionItems: items }, enLabels);
+    assert.ok(html.includes("t1"));
+    assert.ok(html.includes("t2"));
+    assert.ok(!html.includes("t3"));
+    assert.ok(html.includes("(+1)"));
+  });
+
+  it("hides empty risks section", () => {
+    const html = renderThreadAnalysisSummary(baseAnalysis, enLabels);
+    assert.ok(!html.includes(enLabels.threads.risks));
+  });
+
+  it("truncates risks to 2 and shows overflow", () => {
+    const risks = [
+      { level: "high" as const, description: "r1", sourceMailId: "", sourceTime: "" },
+      { level: "medium" as const, description: "r2", sourceMailId: "", sourceTime: "" },
+      { level: "low" as const, description: "r3", sourceMailId: "", sourceTime: "" },
+    ];
+    const html = renderThreadAnalysisSummary({ ...baseAnalysis, risks }, enLabels);
+    assert.ok(html.includes("r1"));
+    assert.ok(html.includes("r2"));
+    assert.ok(!html.includes("r3"));
+    assert.ok(html.includes("(+1)"));
+  });
+
+  it("shows openQuestions truncated to 2", () => {
+    const html = renderThreadAnalysisSummary({
+      ...baseAnalysis,
+      openQuestions: ["q1", "q2", "q3"],
+    }, enLabels);
+    assert.ok(html.includes(enLabels.threads.openQuestions));
+    assert.ok(html.includes("q1"));
+    assert.ok(html.includes("q2"));
+    assert.ok(!html.includes("q3"));
+    assert.ok(html.includes("(+1)"));
+  });
+
+  it("hides empty openQuestions section", () => {
+    const html = renderThreadAnalysisSummary(baseAnalysis, enLabels);
+    assert.ok(!html.includes(enLabels.threads.openQuestions));
   });
 });

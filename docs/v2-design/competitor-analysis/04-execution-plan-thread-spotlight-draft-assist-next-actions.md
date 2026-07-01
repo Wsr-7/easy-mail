@@ -606,7 +606,7 @@ Completion Notes:
 
 ### A3. Expand Dashboard thread summary carefully
 
-Status: [ ] Not started
+Status: [X] Done
 
 Goal:
 
@@ -634,11 +634,16 @@ Acceptance criteria:
 
 Completion Notes:
 
-- Status:
+- Status: Done
 - Files changed:
-- Truncation behavior:
+  - `src/lib/dashboard-render.ts` — `renderThreadAnalysisSummary` expanded with `needMyReply`, `openQuestions`, truncation to 2 items per list with overflow indicator, empty sections hidden
+  - `src/test/dashboard-render.test.ts` — added 10 tests for `renderThreadAnalysisSummary`
+- Truncation behavior: actionItems, risks, openQuestions each capped at 2 items; overflow shows `(+N)` count
 - Tests run:
-- Handover:
+  - `npm run compile`: pass
+  - `npm test -- --test-name-pattern=renderThreadAnalysisSummary`: pass, 228 tests total
+- Commit: (pending)
+- Handover: See `Handover - 2026-07-02 - Claude Opus`
 
 ---
 
@@ -1802,6 +1807,24 @@ Pre-merge challenge question:
 
 Append updates here when a coding agent starts or completes meaningful work.
 
+### Snapshot - 2026-07-02 - A3 Dashboard Summary
+
+Status:
+
+- `A3. Expand Dashboard thread summary carefully` completed.
+
+Current recommendation:
+
+1. Continue with `A4. Update thread report rendering`.
+2. Align thread report sections with Spotlight/Dashboard fields.
+3. Then `A5` tests and `A6` validation to close Milestone A.
+
+Known caution:
+
+- Dashboard now hides empty sections; any test relying on "noItems" placeholder for action/risk lists in thread summary will need updating.
+
+---
+
 ### Snapshot - 2026-07-02 - A2 Workbench Spotlight
 
 Status:
@@ -1862,6 +1885,38 @@ Known caution:
 ---
 
 ## 9. Handover Log
+
+#### Handover - 2026-07-02 - Claude Opus
+
+Status: Done
+
+Changed:
+- Expanded `renderThreadAnalysisSummary` in `src/lib/dashboard-render.ts`:
+  - Added `needMyReply` indicator (shown only when true)
+  - Added `openQuestions` section (truncated to 2)
+  - Truncated `actionItems` and `risks` to 2 items each with `(+N)` overflow
+  - Empty sections are now hidden instead of showing "no items"
+- Added 10 tests in `src/test/dashboard-render.test.ts` covering all new behaviors
+
+Validated:
+- `npm run compile`: pass
+- `npm test -- --test-name-pattern=renderThreadAnalysisSummary`: pass, 228 tests total, 0 fail
+
+Known issues:
+- None
+
+Last safe stopping point:
+- A3 is complete. Dashboard shows truncated scan view; Workbench has full Spotlight detail.
+
+Uncommitted changes / dirty files:
+- `src/lib/dashboard-render.ts`
+- `src/test/dashboard-render.test.ts`
+- `docs/v2-design/competitor-analysis/04-execution-plan-thread-spotlight-draft-assist-next-actions.md`
+
+Next recommended step:
+- Start `A4. Update thread report rendering` — align `buildThreadReport` in `src/lib/report-thread.ts` with Spotlight structure, omit empty sections.
+
+---
 
 #### Handover - 2026-07-02 00:53 - Codex
 
