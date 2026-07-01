@@ -544,6 +544,7 @@ Completion Notes:
   - Workbench timeline already supports opening individual timeline mails: each timeline message with `mailId` renders a `data-action="openInOutlook"` button. The message handler dispatches to `openMailInOutlook(mailId)`, which resolves `entryId`/`storeId` through mail index/store/analysis source and calls `scripts/open-outlook-mail.vbs`.
   - Dashboard timeline currently shows mail ID anchors only, not direct Outlook buttons.
 - Tests run: Not run; A1 was inspection/documentation only.
+- Commit: `a8427e7ddfc2f94dfad4a5571114f1d16a493c58`
 - Handover: See `Handover - 2026-07-02 01:03 - Codex`.
 
 ---
@@ -1839,6 +1840,7 @@ Status: Done
 Changed:
 - Completed `A1. Inspect current thread rendering paths`.
 - Updated A1 Completion Notes and Current Snapshot Updates with rendering path findings.
+- Commit: `a8427e7ddfc2f94dfad4a5571114f1d16a493c58`
 
 Validated:
 - Inspected Workbench, Dashboard, report, schema, labels, message handler, extension Outlook open path, VBS open script, and related tests.
