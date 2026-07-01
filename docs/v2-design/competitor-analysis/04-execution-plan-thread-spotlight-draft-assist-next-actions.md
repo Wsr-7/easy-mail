@@ -402,20 +402,20 @@ Goal:
 
 - Turn draft reply from a static generated result into an editable, polishable, refinable working draft.
 
-Status: [ ] Not started
+Status: [X] Done
 
 Steps:
 
-- [ ] B1. Inspect current draft rendering and copy behavior.
-- [ ] B2. Make draft area editable in the target UI surface.
-- [ ] B3. Add light hint text.
-- [ ] B4. Add instruction input.
-- [ ] B5. Add `Polish` action.
-- [ ] B6. Add `Refine` action.
-- [ ] B7. Store temporary working draft state in extension host memory.
-- [ ] B8. Keep `Copy` using current editable draft text.
-- [ ] B9. Add or update tests.
-- [ ] B10. Run validation.
+- [X] B1. Inspect current draft rendering and copy behavior.
+- [X] B2. Make draft area editable in the target UI surface.
+- [X] B3. Add light hint text.
+- [X] B4. Add instruction input.
+- [X] B5. Add `Polish` action.
+- [X] B6. Add `Refine` action.
+- [X] B7. Store temporary working draft state in extension host memory.
+- [X] B8. Keep `Copy` using current editable draft text.
+- [X] B9. Add or update tests.
+- [X] B10. Run validation.
 
 Acceptance goal:
 
@@ -844,7 +844,7 @@ Completion Notes:
 
 ### B4. Add instruction input
 
-Status: [ ] Not started
+Status: [X] Done
 
 Goal:
 
@@ -870,15 +870,18 @@ Acceptance criteria:
 
 Completion Notes:
 
-- Status:
+- Status: Done (combined with B5/B6)
 - Files changed:
-- Handover:
+  - `src/lib/dashboard-render.ts` — instruction input added to `renderEditableDraftBox`
+  - `src/lib/dashboard-labels.ts` — added `polish`, `refine`, `instructionPlaceholder` labels
+  - `src/lib/workbench-render.ts` — client JS sends `polishDraft`/`refineDraft` with draft text, instruction, itemId
+- Handover: See `Handover - 2026-07-02 - Claude Opus (B4-B6)`
 
 ---
 
 ### B5. Add Polish action
 
-Status: [ ] Not started
+Status: [X] Done
 
 Goal:
 
@@ -900,17 +903,21 @@ Acceptance criteria:
 
 Completion Notes:
 
-- Status:
+- Status: Done
 - Files changed:
-- Prompt behavior:
-- Tests run:
-- Handover:
+  - `src/lib/message-handler.ts` — added `polishDraft` dispatch with empty-draft validation
+  - `src/extension.ts` — added `polishDraft` method using `sendPromptToModel`
+  - `src/lib/workbench-render.ts` — client JS handles `updateDraft` message to replace textarea value
+  - `src/test/message-handler.test.ts` — 2 tests for polishDraft (dispatch + empty draft warning)
+- Prompt behavior: Sends draft text with instruction to preserve intent, improve grammar/clarity/tone, concise professional workplace style
+- Tests run: 237 pass, 0 fail
+- Handover: See `Handover - 2026-07-02 - Claude Opus (B4-B6)`
 
 ---
 
 ### B6. Add Refine action
 
-Status: [ ] Not started
+Status: [X] Done
 
 Goal:
 
@@ -934,17 +941,20 @@ Acceptance criteria:
 
 Completion Notes:
 
-- Status:
+- Status: Done
 - Files changed:
-- Prompt behavior:
-- Tests run:
-- Handover:
+  - `src/lib/message-handler.ts` — added `refineDraft` dispatch with empty-draft and empty-instruction validation
+  - `src/extension.ts` — added `refineDraft` method using `sendPromptToModel`
+  - `src/test/message-handler.test.ts` — 3 tests for refineDraft (dispatch + empty draft + empty instruction)
+- Prompt behavior: Sends draft text + user instruction, rewrites according to instruction, defaults to professional workplace style unless overridden
+- Tests run: 237 pass, 0 fail
+- Handover: See `Handover - 2026-07-02 - Claude Opus (B4-B6)`
 
 ---
 
 ### B7. Store temporary working draft state in extension host memory
 
-Status: [ ] Not started
+Status: [X] Done
 
 Goal:
 
@@ -978,17 +988,24 @@ Acceptance criteria:
 
 Completion Notes:
 
-- Status:
+- Status: Done
 - Files changed:
+  - `src/extension.ts` — added `workingDrafts: Map<string, string>`, cleared on `clearLocalCache`, populated by `polishDraft`/`refineDraft`
 - State behavior:
-- Tests run:
-- Handover:
+  - `workingDrafts` map stores polish/refine results keyed by item ID
+  - Textarea value in webview DOM is the primary state holder (survives panel hide/show via `retainContextWhenHidden: true`)
+  - Full HTML refresh (re-analysis, manual refresh) resets textarea to analysis `draftReply`; this is acceptable for MVP
+  - `Clear Local Cache` calls `workingDrafts.clear()`
+  - VS Code reload / extension restart clears naturally (in-memory Map)
+  - Not written to disk
+- Tests run: compile pass, 237 tests pass
+- Handover: See `Handover - 2026-07-02 - Claude Opus (B4-B8)`
 
 ---
 
 ### B8. Keep Copy using current editable text
 
-Status: [ ] Not started
+Status: [X] Done
 
 Goal:
 
@@ -1001,16 +1018,17 @@ Acceptance criteria:
 
 Completion Notes:
 
-- Status:
-- Files changed:
-- Tests run:
-- Handover:
+- Status: Done (implemented in B2)
+- Files changed: `src/lib/workbench-render.ts` — client JS reads `textarea.value` for copyDraft action
+- Behavior: Copy reads the live textarea value (which reflects user edits and polish/refine updates)
+- Tests run: covered by existing copyDraft tests + B2 editable draft tests
+- Handover: See `Handover - 2026-07-02 - Claude Opus (B4-B8)`
 
 ---
 
 ### B9. Add or update tests
 
-Status: [ ] Not started
+Status: [X] Done
 
 Recommended tests:
 
@@ -1028,15 +1046,18 @@ Acceptance criteria:
 
 Completion Notes:
 
-- Status:
+- Status: Done
 - Tests added/changed:
-- Handover:
+  - `src/test/dashboard-render.test.ts` — 4 tests for `renderEditableDraftBox` (textarea rendering, empty draft, copy button, HTML escaping)
+  - `src/test/message-handler.test.ts` — 5 tests for `polishDraft` (dispatch + empty draft) and `refineDraft` (dispatch + empty draft + empty instruction)
+- Coverage: Both mail and thread surfaces use `renderEditableDraftBox` in Workbench; Dashboard remains read-only
+- Handover: See `Handover - 2026-07-02 - Claude Opus (B4-B8)`
 
 ---
 
 ### B10. Run validation
 
-Status: [ ] Not started
+Status: [X] Done
 
 Commands:
 
@@ -1053,10 +1074,12 @@ Acceptance criteria:
 
 Completion Notes:
 
-- Status:
+- Status: Done
 - Commands run:
-- Results:
-- Handover:
+  - `npm run compile`: pass
+  - `npm test`: pass, 237 tests, 0 fail
+- Results: Full suite green
+- Handover: See `Handover - 2026-07-02 - Claude Opus (B4-B8)`
 
 ---
 
@@ -1830,6 +1853,25 @@ Pre-merge challenge question:
 
 Append updates here when a coding agent starts or completes meaningful work.
 
+### Snapshot - 2026-07-02 - B10 Draft Assist Complete
+
+Status:
+
+- Milestone A (Thread Spotlight) and Milestone B (Draft Assist) are complete.
+
+Current recommendation:
+
+1. Continue with `Milestone C: Open Outlook Compose Window`, starting at `C1`.
+2. The VBScript for Outlook compose (reply/replyAll/forward) needs to be created.
+3. UI buttons for Open Reply / Open Reply All / Open Forward need to be added to the draft box.
+
+Known caution:
+
+- Outlook COM compose behavior (`Reply.Display` + HTMLBody prepend) needs manual testing with classic Outlook.
+- The `polishDraft` and `refineDraft` methods use simple prompts without full mail/thread context. This is intentional for MVP; context enrichment can be added later.
+
+---
+
 ### Snapshot - 2026-07-02 - A3 Dashboard Summary
 
 Status:
@@ -1908,6 +1950,45 @@ Known caution:
 ---
 
 ## 9. Handover Log
+
+#### Handover - 2026-07-02 - Claude Opus (B4-B8)
+
+Status: Done — Milestone B complete
+
+Changed:
+- B4: Added instruction input to `renderEditableDraftBox` with i18n labels (polish, refine, instructionPlaceholder)
+- B5: Added `polishDraft` dispatch in message-handler + implementation in extension.ts using `sendPromptToModel`
+- B6: Added `refineDraft` dispatch with empty-draft and empty-instruction validation + implementation
+- B7: Added `workingDrafts: Map<string, string>` in extension.ts, cleared on `clearLocalCache`
+- B8: Copy already reads `textarea.value` (done in B2)
+- B9-B10: Tests pass (237 total), compile clean
+- Client JS: Workbench sends `polishDraft`/`refineDraft` with draft text, instruction, itemId; handles `updateDraft` message to update textarea
+
+Validated:
+- `npm run compile`: pass
+- `npm test`: 237 pass, 0 fail
+
+Known issues:
+- Polish/Refine prompts are standalone (don't include full mail/thread context). Acceptable for MVP; can be enriched later.
+- Working draft does not survive full webview HTML refresh (re-analysis); survives panel hide/show.
+
+Last safe stopping point:
+- Milestone B complete. Ready for Milestone C (Outlook compose windows).
+
+Uncommitted changes / dirty files:
+- `src/extension.ts`
+- `src/lib/dashboard-render.ts`
+- `src/lib/dashboard-labels.ts`
+- `src/lib/workbench-render.ts`
+- `src/lib/message-handler.ts`
+- `src/test/message-handler.test.ts`
+- `src/test/dashboard-render.test.ts`
+- `docs/v2-design/competitor-analysis/04-execution-plan-thread-spotlight-draft-assist-next-actions.md`
+
+Next recommended step:
+- Start `C1. Inspect existing Outlook open behavior` to begin Milestone C.
+
+---
 
 #### Handover - 2026-07-02 - Claude Opus
 

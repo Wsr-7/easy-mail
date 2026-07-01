@@ -33,6 +33,8 @@ export interface MessageHandlerContext {
   openPromptConfig: () => Promise<void>;
   clearLocalCache: () => Promise<void>;
   openWorkbench: (focusId?: string) => Promise<void>;
+  polishDraft: (draftText: string, itemId: string) => Promise<void>;
+  refineDraft: (draftText: string, instruction: string, itemId: string) => Promise<void>;
 }
 
 export async function handleWebviewMessage(ctx: MessageHandlerContext, message: unknown): Promise<void> {
@@ -40,7 +42,7 @@ export async function handleWebviewMessage(ctx: MessageHandlerContext, message: 
     return;
   }
 
-  const typed = message as { type?: string; draftReply?: string; mailId?: string; mailIds?: string[]; threadId?: string; meetingId?: string; config?: unknown; silent?: boolean };
+  const typed = message as { type?: string; draftReply?: string; draftText?: string; instruction?: string; itemId?: string; mailId?: string; mailIds?: string[]; threadId?: string; meetingId?: string; config?: unknown; silent?: boolean };
   await ctx.log("message:received", {
     type: typed.type || "",
     mailId: typed.mailId || "",
@@ -55,6 +57,31 @@ export async function handleWebviewMessage(ctx: MessageHandlerContext, message: 
     }
     await ctx.copyToClipboard(draftReply);
     ctx.showInfo("Draft reply copied.");
+    return;
+  }
+
+  if (typed.type === "polishDraft") {
+    const draftText = String(typed.draftText || "").trim();
+    if (!draftText) {
+      ctx.showWarning("Draft is empty. Write or generate a draft first.");
+      return;
+    }
+    await ctx.polishDraft(draftText, String(typed.itemId || ""));
+    return;
+  }
+
+  if (typed.type === "refineDraft") {
+    const draftText = String(typed.draftText || "").trim();
+    if (!draftText) {
+      ctx.showWarning("Draft is empty. Write or generate a draft first.");
+      return;
+    }
+    const instruction = String(typed.instruction || "").trim();
+    if (!instruction) {
+      ctx.showWarning("Please enter an instruction for refine, or use Polish instead.");
+      return;
+    }
+    await ctx.refineDraft(draftText, instruction, String(typed.itemId || ""));
     return;
   }
 

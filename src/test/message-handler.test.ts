@@ -36,6 +36,8 @@ function stubContext(overrides?: Partial<MessageHandlerContext>): MessageHandler
     openPromptConfig: mock.fn(async () => {}),
     clearLocalCache: mock.fn(async () => {}),
     openWorkbench: mock.fn(async () => {}),
+    polishDraft: mock.fn(async () => {}),
+    refineDraft: mock.fn(async () => {}),
     ...overrides
   };
 }
@@ -154,5 +156,44 @@ describe("saveConfigFromMessage", () => {
     const ctx = stubContext();
     await saveConfigFromMessage(ctx, { config: { folders: "Inbox" }, silent: true });
     assert.equal((ctx.showInfo as any).mock.callCount(), 0);
+  });
+});
+
+describe("polishDraft", () => {
+  it("dispatches polish with draft text and itemId", async () => {
+    const ctx = stubContext();
+    await handleWebviewMessage(ctx, { type: "polishDraft", draftText: "Hello", itemId: "mail:m1" });
+    assert.equal((ctx.polishDraft as any).mock.callCount(), 1);
+    assert.deepEqual((ctx.polishDraft as any).mock.calls[0].arguments, ["Hello", "mail:m1"]);
+  });
+
+  it("warns on empty draft", async () => {
+    const ctx = stubContext();
+    await handleWebviewMessage(ctx, { type: "polishDraft", draftText: "  ", itemId: "mail:m1" });
+    assert.equal((ctx.polishDraft as any).mock.callCount(), 0);
+    assert.equal((ctx.showWarning as any).mock.callCount(), 1);
+  });
+});
+
+describe("refineDraft", () => {
+  it("dispatches refine with draft text, instruction, and itemId", async () => {
+    const ctx = stubContext();
+    await handleWebviewMessage(ctx, { type: "refineDraft", draftText: "Hello", instruction: "make shorter", itemId: "mail:m1" });
+    assert.equal((ctx.refineDraft as any).mock.callCount(), 1);
+    assert.deepEqual((ctx.refineDraft as any).mock.calls[0].arguments, ["Hello", "make shorter", "mail:m1"]);
+  });
+
+  it("warns on empty draft", async () => {
+    const ctx = stubContext();
+    await handleWebviewMessage(ctx, { type: "refineDraft", draftText: "", instruction: "make shorter", itemId: "mail:m1" });
+    assert.equal((ctx.refineDraft as any).mock.callCount(), 0);
+    assert.equal((ctx.showWarning as any).mock.callCount(), 1);
+  });
+
+  it("warns on empty instruction", async () => {
+    const ctx = stubContext();
+    await handleWebviewMessage(ctx, { type: "refineDraft", draftText: "Hello", instruction: "", itemId: "mail:m1" });
+    assert.equal((ctx.refineDraft as any).mock.callCount(), 0);
+    assert.equal((ctx.showWarning as any).mock.callCount(), 1);
   });
 });

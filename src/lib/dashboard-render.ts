@@ -234,7 +234,10 @@ export function renderEditableDraftBox(draftReply: string, labels: DashboardLabe
     <div class="wb-field"><strong>${escapeHtml(labels.threads.draftReply)}:</strong></div>
     <textarea class="draft-textarea" rows="6">${escapeHtml(draft)}</textarea>
     <div class="draft-hint muted">${escapeHtml(labels.card.draftHint)}</div>
+    <input class="draft-instruction" type="text" placeholder="${escapeAttr(labels.card.instructionPlaceholder)}" />
     <div class="draft-actions">
+      <button class="wb-btn" data-action="polishDraft">${escapeHtml(labels.card.polish)}</button>
+      <button class="wb-btn" data-action="refineDraft">${escapeHtml(labels.card.refine)}</button>
       <button class="wb-btn" data-action="copyDraft">${escapeHtml(labels.card.copyDraft)}</button>
     </div>
   </div>`;
@@ -340,6 +343,7 @@ export interface DashboardRenderInput {
   availableModels: AvailableModel[];
   busyKind: string;
   isBusy: boolean;
+  workingDrafts?: Map<string, string>;
 }
 
 /** @deprecated Old monolithic dashboard renderer — replaced by sidebar-render.ts and workbench-render.ts */

@@ -20,7 +20,7 @@ import { renderEasyMailGuideHtml } from "./lib/guide-webview";
 import { type Locale, serializeFolderDateMap, getLocaleFromConfig, buildSecuritySettings } from "./lib/config-utils";
 import { getLabels, buildCategoryLabels } from "./lib/dashboard-labels";
 import { renderSidebarHtml } from "./lib/sidebar-render";
-import { analyzeBatchCore as analyzeBatchCoreImpl, analyzeThreadCore as analyzeThreadCoreImpl, translateExistingAnalysis as translateExistingAnalysisImpl, type AnalysisContext } from "./lib/app-analysis";
+import { analyzeBatchCore as analyzeBatchCoreImpl, analyzeThreadCore as analyzeThreadCoreImpl, translateExistingAnalysis as translateExistingAnalysisImpl, sendPromptToModel, type AnalysisContext } from "./lib/app-analysis";
 import { handleWebviewMessage, type MessageHandlerContext } from "./lib/message-handler";
 import { runProcess, formatElapsedSeconds, formatError, deleteFileIfExists, sanitizeProcessArgs } from "./lib/process-runner";
 import { AppDataStore } from "./lib/app-data";
@@ -85,6 +85,7 @@ class EasyMailApp {
   private availableModelsPending: Promise<AvailableModel[]> | null = null;
   private guidePanel: vscode.WebviewPanel | null = null;
   private workbenchPanel: vscode.WebviewPanel | null = null;
+  private workingDrafts: Map<string, string> = new Map();
 
   public constructor(private readonly context: vscode.ExtensionContext) {
     this.llmProvider = new CopilotProvider();
@@ -181,6 +182,34 @@ class EasyMailApp {
       panel.webview.postMessage({ type: "focusItem", id: focusId });
     }
     await this.log("workbench:opened", {});
+  }
+
+  private async polishDraft(draftText: string, itemId: string): Promise<void> {
+    await this.log("draft:polish", { itemId });
+    const config = await this.readConfig();
+    const prompt = `You are an email writing assistant. Polish the following draft reply: improve grammar, clarity, and tone while preserving the original intent and meaning. Keep the style concise, professional, and appropriate for internal workplace communication. Output only the improved reply text, nothing else.\n\nDraft:\n${draftText}`;
+    try {
+      const { raw } = await sendPromptToModel(this.analysisContext(), prompt, String(config.modelFamily || ""), "polish");
+      const result = raw.trim();
+      this.workingDrafts.set(itemId, result);
+      this.workbenchPanel?.webview.postMessage({ type: "updateDraft", text: result, itemId });
+    } catch (err) {
+      vscode.window.showWarningMessage(`Polish failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  private async refineDraft(draftText: string, instruction: string, itemId: string): Promise<void> {
+    await this.log("draft:refine", { itemId });
+    const config = await this.readConfig();
+    const prompt = `You are an email writing assistant. Rewrite the following draft reply according to the user's instruction. Keep the style concise, professional, and appropriate for internal workplace communication unless the instruction says otherwise. Output only the rewritten reply text, nothing else.\n\nInstruction: ${instruction}\n\nDraft:\n${draftText}`;
+    try {
+      const { raw } = await sendPromptToModel(this.analysisContext(), prompt, String(config.modelFamily || ""), "refine");
+      const result = raw.trim();
+      this.workingDrafts.set(itemId, result);
+      this.workbenchPanel?.webview.postMessage({ type: "updateDraft", text: result, itemId });
+    } catch (err) {
+      vscode.window.showWarningMessage(`Refine failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   private async getWorkbenchHtml(): Promise<string> {
@@ -633,6 +662,7 @@ class EasyMailApp {
     await deleteFileIfExists(this.data.getThreadReportPath());
     await deleteFileIfExists(this.data.getSingleMailReportPath());
     await this.data.writeMeetingStore(emptyMeetingStore());
+    this.workingDrafts.clear();
     await this.refresh();
     await vscode.window.showInformationMessage("Local email cache cleared.");
   }
@@ -888,7 +918,9 @@ class EasyMailApp {
       openSettings: () => this.openSettings(),
       openPromptConfig: () => this.openPromptConfig(),
       clearLocalCache: () => this.clearLocalCache(),
-      openWorkbench: (focusId) => this.openWorkbench(focusId)
+      openWorkbench: (focusId) => this.openWorkbench(focusId),
+      polishDraft: (draftText, itemId) => this.polishDraft(draftText, itemId),
+      refineDraft: (draftText, instruction, itemId) => this.refineDraft(draftText, instruction, itemId)
     };
   }
 

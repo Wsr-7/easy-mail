@@ -354,6 +354,10 @@ window.addEventListener('message', function(e) {
     showReader(currentId);
     vscode.setState({ currentId: currentId });
   }
+  if (msg && msg.type === 'updateDraft' && msg.itemId) {
+    var reader = document.querySelector('.wb-reader[data-id="' + msg.itemId + '"]');
+    if (reader) { var ta = reader.querySelector('.draft-textarea'); if (ta) ta.value = msg.text || ''; }
+  }
 });
 
 document.addEventListener('click', function(e) {
@@ -361,6 +365,7 @@ document.addEventListener('click', function(e) {
   if (!t) return;
   var a = t.getAttribute('data-action');
   if (a === 'copyDraft') { var ta = t.closest('.draft-box-editable'); var v = ta ? ta.querySelector('.draft-textarea') : null; post('copyDraft', { draftReply: v ? v.value : (t.getAttribute('data-draft-reply') || '') }); }
+  if (a === 'polishDraft' || a === 'refineDraft') { var box = t.closest('.draft-box-editable'); var txt = box ? box.querySelector('.draft-textarea') : null; var ins = box ? box.querySelector('.draft-instruction') : null; post(a, { draftText: txt ? txt.value : '', instruction: ins ? ins.value : '', itemId: currentId || '' }); }
   if (a === 'ignore') post('ignore', { mailId: t.getAttribute('data-mail-id') || '' });
   if (a === 'unignore') post('unignore', { mailId: t.getAttribute('data-mail-id') || '' });
   if (a === 'openInOutlook') post('openInOutlook', { mailId: t.getAttribute('data-mail-id') || '' });
