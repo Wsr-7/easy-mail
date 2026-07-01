@@ -36,7 +36,7 @@ export type DashboardLabels = {
   meta: Record<"range" | "folders" | "generated" | "requestedModel" | "lastUsedModel" | "lastPull" | "lastImport", string>;
   stats: Record<"pulled" | "pending" | "analysed" | "blocked" | "mustHandle" | "risk" | "waiting" | "notice" | "threads", string>;
   categories: Record<string, string>;
-  card: Record<"from" | "received" | "summary" | "reason" | "suggestedAction" | "copyDraft" | "draftHint" | "polish" | "refine" | "instructionPlaceholder" | "ignore" | "restore" | "openInOutlook" | "noItems" | "thread", string>;
+  card: Record<"from" | "received" | "summary" | "reason" | "suggestedAction" | "copyDraft" | "draftHint" | "polish" | "refine" | "instructionPlaceholder" | "openReply" | "openReplyAll" | "openForward" | "ignore" | "restore" | "openInOutlook" | "noItems" | "thread", string>;
   pending: Record<"title" | "blockedTitle" | "classification" | "autoAllowed" | "manualRequired" | "gateBlocked" | "securityReason" | "select", string>;
   threads: Record<"title" | "participants" | "messages" | "lastTime" | "folders" | "contentStatus" | "security" | "analysis" | "analyzeThread" | "spotlight" | "currentStatus" | "keyDecisions" | "openQuestions" | "actionItems" | "waitingOn" | "risks" | "needMyReply" | "suggestedAction" | "partialContext" | "yes" | "no" | "draftReply" | "timeline" | "attachments" | "mailIds", string>;
   meetings: Record<"title" | "organizer" | "time" | "location" | "attendees" | "status" | "allDay" | "recurring" | "openInOutlook" | "notResponded" | "accepted" | "tentative" | "declined" | "organizer_status", string>;
@@ -135,6 +135,9 @@ export const LABELS: Record<Locale, DashboardLabels> = {
       polish: "润色",
       refine: "优化",
       instructionPlaceholder: "可选指令，例如：写短一些、请他们确认截止日期",
+      openReply: "Outlook 回复",
+      openReplyAll: "Outlook 全部回复",
+      openForward: "Outlook 转发",
       ignore: "忽略",
       restore: "恢复",
       openInOutlook: "在 Outlook 打开",
@@ -299,6 +302,9 @@ export const LABELS: Record<Locale, DashboardLabels> = {
       polish: "Polish",
       refine: "Refine",
       instructionPlaceholder: "Optional instruction, e.g. make it shorter or ask them to confirm the deadline",
+      openReply: "Open Reply",
+      openReplyAll: "Open Reply All",
+      openForward: "Open Forward",
       ignore: "Ignore",
       restore: "Restore",
       openInOutlook: "Open in Outlook",

@@ -38,6 +38,7 @@ function stubContext(overrides?: Partial<MessageHandlerContext>): MessageHandler
     openWorkbench: mock.fn(async () => {}),
     polishDraft: mock.fn(async () => {}),
     refineDraft: mock.fn(async () => {}),
+    composeOutlookMail: mock.fn(async () => {}),
     ...overrides
   };
 }
@@ -194,6 +195,36 @@ describe("refineDraft", () => {
     const ctx = stubContext();
     await handleWebviewMessage(ctx, { type: "refineDraft", draftText: "Hello", instruction: "", itemId: "mail:m1" });
     assert.equal((ctx.refineDraft as any).mock.callCount(), 0);
+    assert.equal((ctx.showWarning as any).mock.callCount(), 1);
+  });
+});
+
+describe("composeMail", () => {
+  it("dispatches reply mode", async () => {
+    const ctx = stubContext();
+    await handleWebviewMessage(ctx, { type: "composeMail", mode: "reply", draftText: "Hi", itemId: "m1" });
+    assert.equal((ctx.composeOutlookMail as any).mock.callCount(), 1);
+    assert.deepEqual((ctx.composeOutlookMail as any).mock.calls[0].arguments, ["reply", "Hi", "m1"]);
+  });
+
+  it("dispatches replyAll mode", async () => {
+    const ctx = stubContext();
+    await handleWebviewMessage(ctx, { type: "composeMail", mode: "replyAll", draftText: "Hi", itemId: "m1" });
+    assert.equal((ctx.composeOutlookMail as any).mock.callCount(), 1);
+    assert.deepEqual((ctx.composeOutlookMail as any).mock.calls[0].arguments, ["replyAll", "Hi", "m1"]);
+  });
+
+  it("dispatches forward mode", async () => {
+    const ctx = stubContext();
+    await handleWebviewMessage(ctx, { type: "composeMail", mode: "forward", draftText: "", itemId: "m1" });
+    assert.equal((ctx.composeOutlookMail as any).mock.callCount(), 1);
+    assert.deepEqual((ctx.composeOutlookMail as any).mock.calls[0].arguments, ["forward", "", "m1"]);
+  });
+
+  it("warns on unsupported mode", async () => {
+    const ctx = stubContext();
+    await handleWebviewMessage(ctx, { type: "composeMail", mode: "invalid", draftText: "", itemId: "m1" });
+    assert.equal((ctx.composeOutlookMail as any).mock.callCount(), 0);
     assert.equal((ctx.showWarning as any).mock.callCount(), 1);
   });
 });

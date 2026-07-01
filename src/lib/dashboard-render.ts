@@ -239,6 +239,9 @@ export function renderEditableDraftBox(draftReply: string, labels: DashboardLabe
       <button class="wb-btn" data-action="polishDraft">${escapeHtml(labels.card.polish)}</button>
       <button class="wb-btn" data-action="refineDraft">${escapeHtml(labels.card.refine)}</button>
       <button class="wb-btn" data-action="copyDraft">${escapeHtml(labels.card.copyDraft)}</button>
+      <button class="wb-btn" data-action="composeMail" data-mode="reply">${escapeHtml(labels.card.openReply)}</button>
+      <button class="wb-btn" data-action="composeMail" data-mode="replyAll">${escapeHtml(labels.card.openReplyAll)}</button>
+      <button class="wb-btn" data-action="composeMail" data-mode="forward">${escapeHtml(labels.card.openForward)}</button>
     </div>
   </div>`;
 }

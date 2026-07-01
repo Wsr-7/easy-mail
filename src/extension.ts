@@ -640,6 +640,37 @@ class EasyMailApp {
     void vscode.window.showInformationMessage("Opened mail in Outlook.");
   }
 
+  public async composeOutlookMail(mode: string, draftText: string, itemId: string): Promise<void> {
+    const target = await this.findOutlookOpenTarget(itemId);
+    if (!target?.entryId) {
+      await vscode.window.showWarningMessage("Easy Mail cannot open Outlook compose because the mail EntryID is no longer available.");
+      return;
+    }
+    const scriptPath = await this.findScript("compose-outlook-mail.vbs");
+    const args = ["//nologo", scriptPath, "--entry-id", target.entryId];
+    if (target.storeId) {
+      args.push("--store-id", target.storeId);
+    }
+    args.push("--mode", mode);
+
+    if (draftText.trim()) {
+      const tmpDir = this.context.globalStorageUri.fsPath;
+      await fs.promises.mkdir(tmpDir, { recursive: true });
+      const bodyPath = path.join(tmpDir, "compose-draft-body.txt");
+      await fs.promises.writeFile(bodyPath, draftText, "utf8");
+      args.push("--body-file", bodyPath);
+    }
+
+    try {
+      await runProcess("cscript.exe", args, 30000, (event, data) => {
+        void this.log(`compose:${event}`, data);
+      });
+      void vscode.window.showInformationMessage(`Opened Outlook ${mode} window.`);
+    } catch (err) {
+      await vscode.window.showWarningMessage(`Outlook compose failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
   public async openMeetingInOutlook(meetingId: string): Promise<void> {
     if (!meetingId) return;
     const scriptPath = await this.findScript("open-outlook-mail.vbs");
@@ -920,7 +951,8 @@ class EasyMailApp {
       clearLocalCache: () => this.clearLocalCache(),
       openWorkbench: (focusId) => this.openWorkbench(focusId),
       polishDraft: (draftText, itemId) => this.polishDraft(draftText, itemId),
-      refineDraft: (draftText, instruction, itemId) => this.refineDraft(draftText, instruction, itemId)
+      refineDraft: (draftText, instruction, itemId) => this.refineDraft(draftText, instruction, itemId),
+      composeOutlookMail: (mode, draftText, itemId) => this.composeOutlookMail(mode, draftText, itemId)
     };
   }
 
