@@ -312,6 +312,7 @@ export interface DashboardRenderInput {
   isBusy: boolean;
 }
 
+/** @deprecated Old monolithic dashboard renderer — replaced by sidebar-render.ts and workbench-render.ts */
 export function renderDashboardHtml(input: DashboardRenderInput): string {
   const { state, store, index, availableModels, busyKind, isBusy } = input;
   const digestMeta = state.digestMetadata || {};

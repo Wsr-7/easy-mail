@@ -31,7 +31,7 @@ export interface MessageHandlerContext {
   openSettings: () => Promise<void>;
   openPromptConfig: () => Promise<void>;
   clearLocalCache: () => Promise<void>;
-  openWorkbench: () => Promise<void>;
+  openWorkbench: (focusId?: string) => Promise<void>;
 }
 
 export async function handleWebviewMessage(ctx: MessageHandlerContext, message: unknown): Promise<void> {
@@ -205,6 +205,12 @@ export async function handleWebviewMessage(ctx: MessageHandlerContext, message: 
 
   if (typed.type === "openWorkbench") {
     await ctx.openWorkbench();
+    return;
+  }
+
+  if (typed.type === "openInWorkbench") {
+    const focusId = typed.mailId || typed.threadId || "";
+    await ctx.openWorkbench(focusId);
     return;
   }
 

@@ -56,7 +56,8 @@ function queueLabel(queueId: string, labels: DashboardLabels, categoryLabels: Re
   return categoryLabels[queueId] || labels.categories[queueId] || queueId;
 }
 
-function renderSidebarMailRow(item: StoredMail, queue: string, labels: DashboardLabels, extra: string): string {
+function renderSidebarMailRow(item: StoredMail, queue: string, labels: DashboardLabels, extra: string, locale: string): string {
+  const wbLabel = locale === "zh-CN" ? "工作台" : "Workbench";
   return `<div class="sb-row" data-queue="${escapeAttr(queue)}" data-mail-id="${escapeAttr(item.mailId)}">
   <div class="sb-row-main" onclick="toggleRow(this)">
     <span class="sb-subject">${escapeHtml(item.subject || item.mailId)}</span>
@@ -68,6 +69,7 @@ function renderSidebarMailRow(item: StoredMail, queue: string, labels: Dashboard
     ${extra}
     <div class="sb-actions">
       <button class="sb-btn" data-action="openInOutlook" data-mail-id="${escapeAttr(item.mailId)}">${escapeHtml(labels.card.openInOutlook)}</button>
+      <button class="sb-btn ghost" data-action="openInWorkbench" data-mail-id="${escapeAttr(item.mailId)}">${escapeHtml(wbLabel)}</button>
       ${queue === "ignored" ? `<button class="sb-btn ghost" data-action="unignore" data-mail-id="${escapeAttr(item.mailId)}">${escapeHtml(labels.card.restore)}</button>` : `<button class="sb-btn ghost" data-action="ignore" data-mail-id="${escapeAttr(item.mailId)}">${escapeHtml(labels.card.ignore)}</button>`}
     </div>
   </div>
@@ -78,7 +80,8 @@ function renderSidebarAnalysisRow(
   item: AnalysisResult["items"][number],
   queue: string,
   labels: DashboardLabels,
-  threadByMailId: Map<string, string>
+  threadByMailId: Map<string, string>,
+  locale: string
 ): string {
   const priority = formatPriority(item.priority, labels);
   const draftHtml = item.draftReply ? renderDraftBox(item.draftReply) : "";
@@ -86,6 +89,7 @@ function renderSidebarAnalysisRow(
   const threadLink = threadId
     ? `<div class="sb-field"><strong>${escapeHtml(labels.card.thread)}:</strong> <a href="#" onclick="showQueue('threads');return false;">${escapeHtml(threadId)}</a></div>`
     : "";
+  const wbLabel = locale === "zh-CN" ? "工作台" : "Workbench";
   return `<div class="sb-row" data-queue="${escapeAttr(queue)}" data-mail-id="${escapeAttr(item.mailId)}" id="${escapeAttr(domIdForMail(item.mailId))}">
   <div class="sb-row-main" onclick="toggleRow(this)">
     <span class="sb-subject">${escapeHtml(item.subject || item.mailId)}</span>
@@ -101,6 +105,7 @@ function renderSidebarAnalysisRow(
     ${draftHtml}
     <div class="sb-actions">
       <button class="sb-btn" data-action="openInOutlook" data-mail-id="${escapeAttr(item.mailId)}">${escapeHtml(labels.card.openInOutlook)}</button>
+      <button class="sb-btn ghost" data-action="openInWorkbench" data-mail-id="${escapeAttr(item.mailId)}">${escapeHtml(wbLabel)}</button>
       ${queue === "ignored" ? `<button class="sb-btn ghost" data-action="unignore" data-mail-id="${escapeAttr(item.mailId)}">${escapeHtml(labels.card.restore)}</button>` : `<button class="sb-btn ghost" data-action="ignore" data-mail-id="${escapeAttr(item.mailId)}">${escapeHtml(labels.card.ignore)}</button>`}
     </div>
   </div>
@@ -203,7 +208,7 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
     const gateDecision = securityDecisions.get(item.mailId);
     const extra = `<div class="sb-field"><strong>${escapeHtml(labels.pending.classification)}:</strong> ${escapeHtml(formatClassification(classification))}</div>
       ${gateDecision?.reasons.length ? `<div class="sb-field"><strong>${escapeHtml(labels.pending.securityReason)}:</strong> ${escapeHtml(gateDecision.reasons.join("; "))}</div>` : ""}`;
-    return renderSidebarMailRow(item, "pending", labels, extra);
+    return renderSidebarMailRow(item, "pending", labels, extra, locale);
   }).join("");
 
   const blockedRows = queue.blocked.map((item) => {
@@ -211,15 +216,15 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
     const gateDecision = securityDecisions.get(item.mailId);
     const extra = `<div class="sb-field"><strong>${escapeHtml(labels.pending.classification)}:</strong> ${escapeHtml(formatClassification(classification))}</div>
       <div class="sb-field sb-blocked-reason"><strong>${escapeHtml(labels.pending.gateBlocked)}:</strong> ${escapeHtml(gateDecision?.reasons.join("; ") || "-")}</div>`;
-    return renderSidebarMailRow(item, "blocked", labels, extra);
+    return renderSidebarMailRow(item, "blocked", labels, extra, locale);
   }).join("");
 
   const analysisRows = state.categories.map((cat) =>
-    cat.items.map((item) => renderSidebarAnalysisRow(item, cat.id, labels, threadByMailId)).join("")
+    cat.items.map((item) => renderSidebarAnalysisRow(item, cat.id, labels, threadByMailId, locale)).join("")
   ).join("");
 
   const ignoredPendingRows = (queue.ignoredPending || []).map((item) => {
-    return renderSidebarMailRow(item, "ignored", labels, "");
+    return renderSidebarMailRow(item, "ignored", labels, "", locale);
   }).join("");
 
   const threadRows = [...(visibleThreadStore.items || [])].sort((a, b) =>
@@ -274,7 +279,7 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
     display: inline-flex; align-items: center; justify-content: center;
     opacity: 0.6; position: relative;
   }
-  .sb-icon-btn:hover { opacity: 1; background: var(--vscode-list-hoverBackground, rgba(255,255,255,0.08)); }
+  .sb-icon-btn:hover { opacity: 1; background: var(--vscode-list-hoverBackground, var(--vscode-widget-border, rgba(128,128,128,0.15))); }
   .sb-icon-btn svg { width: 14px; height: 14px; }
 
   /* ── Language dropdown ── */
@@ -292,7 +297,7 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
     background: transparent; color: var(--vscode-menu-foreground, var(--vscode-dropdown-foreground, #ccc));
     font-size: 12px;
   }
-  .sb-lang-option:hover { background: var(--vscode-menu-selectionBackground, var(--vscode-list-hoverBackground, rgba(255,255,255,0.08))); }
+  .sb-lang-option:hover { background: var(--vscode-menu-selectionBackground, var(--vscode-list-hoverBackground, var(--vscode-widget-border, rgba(128,128,128,0.15)))); }
   .sb-lang-option.active::before { content: "✓"; font-size: 11px; opacity: 0.8; }
 
   /* ── Action bar ── */
@@ -310,7 +315,7 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
     display: inline-flex; align-items: center; justify-content: center; gap: 5px;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     font-size: 12px; font-weight: 500;
-    border: 1px solid rgba(255,255,255,0.06);
+    border: 1px solid var(--vscode-widget-border, rgba(128,128,128,0.15));
     transition: background 0.15s, transform 0.1s;
   }
   .sb-primary:hover:not(:disabled) { background: var(--vscode-button-secondaryHoverBackground, #45494e); }
@@ -321,7 +326,7 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
     background: var(--vscode-button-secondaryBackground, #3a3d41);
     color: var(--vscode-button-secondaryForeground, #fff);
     border-radius: 4px; font-size: 12px;
-    border: 1px solid rgba(255,255,255,0.06);
+    border: 1px solid var(--vscode-widget-border, rgba(128,128,128,0.15));
     transition: background 0.15s, transform 0.1s;
   }
   .sb-secondary:hover:not(:disabled) { background: var(--vscode-button-secondaryHoverBackground, #45494e); }
@@ -331,7 +336,7 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
   .sb-analyze-group .sb-primary { border-radius: 4px 0 0 4px; flex: 1; border-right: none; }
   .sb-batch-select {
     width: 42px; padding: 4px 2px;
-    border: 1px solid rgba(255,255,255,0.06); border-left: 1px solid rgba(255,255,255,0.08);
+    border: 1px solid var(--vscode-widget-border, rgba(128,128,128,0.15)); border-left: 1px solid var(--vscode-widget-border, rgba(128,128,128,0.15));
     border-radius: 0 4px 4px 0;
     background: var(--vscode-input-background, #3c3c3c);
     color: var(--vscode-input-foreground, #ccc);
@@ -345,7 +350,7 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
     font-size: 10px; color: var(--vscode-editorWarning-foreground, #cca700);
     padding: 2px 10px 0; display: flex; align-items: center; gap: 4px;
   }
-  .button-spinner { width: 10px; height: 10px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; }
+  .button-spinner { width: 10px; height: 10px; border: 2px solid var(--vscode-widget-border, rgba(128,128,128,0.3)); border-top-color: var(--vscode-foreground, #fff); border-radius: 50%; animation: spin 0.8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
   /* ── Scrollable middle ── */
@@ -363,7 +368,7 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
     color: var(--vscode-sideBar-foreground, var(--vscode-foreground, #ccc));
     text-align: left;
   }
-  .sb-queue-btn:hover { background: var(--vscode-list-hoverBackground, rgba(255,255,255,0.05)); }
+  .sb-queue-btn:hover { background: var(--vscode-list-hoverBackground, var(--vscode-list-hoverBackground, rgba(128,128,128,0.08))); }
   .sb-queue-btn.active {
     background: var(--vscode-list-activeSelectionBackground, #094771);
     color: var(--vscode-list-activeSelectionForeground, #fff);
@@ -386,7 +391,7 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
   .sb-row { border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, rgba(128,128,128,0.08)); }
   .sb-row[hidden] { display: none; }
   .sb-row-main { display: flex; align-items: center; gap: 6px; padding: 6px 12px; cursor: pointer; }
-  .sb-row-main:hover { background: var(--vscode-list-hoverBackground, rgba(255,255,255,0.05)); }
+  .sb-row-main:hover { background: var(--vscode-list-hoverBackground, var(--vscode-list-hoverBackground, rgba(128,128,128,0.08))); }
   .sb-subject { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
   .sb-meta { font-size: 11px; opacity: 0.55; white-space: nowrap; max-width: 100px; overflow: hidden; text-overflow: ellipsis; }
   .sb-badge { font-size: 10px; padding: 1px 6px; border-radius: 8px; white-space: nowrap; background: var(--vscode-badge-background, #4d4d4d); color: var(--vscode-badge-foreground, #fff); }
@@ -412,9 +417,9 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
   .sb-btn:disabled { opacity: 0.35; cursor: not-allowed; }
   .sb-btn.ghost {
     background: transparent; color: var(--vscode-sideBar-foreground, var(--vscode-foreground, #ccc));
-    border: 1px solid rgba(255,255,255,0.08);
+    border: 1px solid var(--vscode-widget-border, rgba(128,128,128,0.15));
   }
-  .sb-btn.ghost:hover:not(:disabled) { background: var(--vscode-list-hoverBackground, rgba(255,255,255,0.08)); }
+  .sb-btn.ghost:hover:not(:disabled) { background: var(--vscode-list-hoverBackground, var(--vscode-widget-border, rgba(128,128,128,0.15))); }
   .sb-btn.is-busy { gap: 6px; }
   .sb-list { margin: 2px 0 2px 16px; padding: 0; list-style: disc; }
   .sb-list li { padding: 1px 0; }
@@ -449,10 +454,10 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
     padding: 4px 10px; font-size: 11px; border-radius: 4px;
     background: transparent;
     color: var(--vscode-sideBar-foreground, var(--vscode-foreground, #ccc));
-    border: 1px solid rgba(255,255,255,0.08);
+    border: 1px solid var(--vscode-widget-border, rgba(128,128,128,0.15));
     transition: background 0.15s, transform 0.1s;
   }
-  .sb-bottom-btn:hover { background: var(--vscode-list-hoverBackground, rgba(255,255,255,0.08)); }
+  .sb-bottom-btn:hover { background: var(--vscode-list-hoverBackground, var(--vscode-widget-border, rgba(128,128,128,0.15))); }
   .sb-bottom-btn:active { transform: scale(0.96); }
   .sb-bottom-btn:disabled { opacity: 0.35; cursor: not-allowed; }
   .sb-bottom-btn.wb-open {
@@ -474,7 +479,7 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
     padding: 5px 8px; border-radius: 4px; font-size: 12px;
     background: var(--vscode-input-background, #3c3c3c);
     color: var(--vscode-input-foreground, #ccc);
-    border: 1px solid var(--vscode-input-border, rgba(255,255,255,0.08));
+    border: 1px solid var(--vscode-input-border, var(--vscode-widget-border, rgba(128,128,128,0.15)));
     -webkit-appearance: none; -moz-appearance: none; appearance: none;
     transition: border-color 0.15s;
   }
@@ -701,6 +706,7 @@ document.addEventListener('click', function(event) {
   if (action === 'unignore') post('unignore', { mailId: target.getAttribute('data-mail-id') || '' });
   if (action === 'openInOutlook') post('openInOutlook', { mailId: target.getAttribute('data-mail-id') || '' });
   if (action === 'analyzeThread') post('analyzeThread', { threadId: target.getAttribute('data-thread-id') || '' });
+  if (action === 'openInWorkbench') post('openInWorkbench', { mailId: target.getAttribute('data-mail-id') || '' });
 });
 </script>
 </body>

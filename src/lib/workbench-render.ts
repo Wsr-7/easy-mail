@@ -253,14 +253,14 @@ export function renderWorkbenchHtml(input: DashboardRenderInput): string {
     padding: 5px 14px; border-radius: 4px; font-size: 12px; font-weight: 500;
     background: var(--vscode-button-secondaryBackground, #3a3d41);
     color: var(--vscode-button-secondaryForeground, #fff);
-    border: 1px solid rgba(255,255,255,0.06);
+    border: 1px solid var(--vscode-widget-border, rgba(128,128,128,0.15));
     display: inline-flex; align-items: center; gap: 5px;
     transition: background 0.15s, transform 0.1s;
   }
   .wb-act:hover:not(:disabled) { background: var(--vscode-button-secondaryHoverBackground, #45494e); }
   .wb-act:active:not(:disabled) { transform: scale(0.97); }
   .wb-act:disabled { opacity: 0.35; cursor: not-allowed; }
-  .button-spinner { width: 10px; height: 10px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; }
+  .button-spinner { width: 10px; height: 10px; border: 2px solid var(--vscode-widget-border, rgba(128,128,128,0.3)); border-top-color: var(--vscode-foreground, #fff); border-radius: 50%; animation: spin 0.8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
   /* ── Two-column layout ── */
@@ -283,7 +283,7 @@ export function renderWorkbenchHtml(input: DashboardRenderInput): string {
     color: var(--vscode-sideBar-foreground, var(--vscode-foreground, #ccc));
     opacity: 0.6; white-space: nowrap; transition: background 0.15s, opacity 0.15s;
   }
-  .wb-tab:hover { opacity: 1; background: var(--vscode-list-hoverBackground, rgba(255,255,255,0.06)); }
+  .wb-tab:hover { opacity: 1; background: var(--vscode-list-hoverBackground, var(--vscode-widget-border, rgba(128,128,128,0.15))); }
   .wb-tab.active {
     opacity: 1;
     background: var(--vscode-list-activeSelectionBackground, #094771);
@@ -295,7 +295,7 @@ export function renderWorkbenchHtml(input: DashboardRenderInput): string {
     padding: 8px 12px; cursor: pointer;
     border-bottom: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.06));
   }
-  .wb-item:hover { background: var(--vscode-list-hoverBackground, rgba(255,255,255,0.04)); }
+  .wb-item:hover { background: var(--vscode-list-hoverBackground, var(--vscode-list-hoverBackground, rgba(128,128,128,0.08))); }
   .wb-item.active { background: var(--vscode-list-activeSelectionBackground, #094771); color: var(--vscode-list-activeSelectionForeground, #fff); }
   .wb-item[hidden] { display: none; }
   .wb-item-subject { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -327,7 +327,7 @@ export function renderWorkbenchHtml(input: DashboardRenderInput): string {
   .wb-btn:hover:not(:disabled) { background: var(--vscode-button-hoverBackground, #1177bb); }
   .wb-btn:active:not(:disabled) { transform: scale(0.97); }
   .wb-btn:disabled { opacity: 0.35; cursor: not-allowed; }
-  .wb-btn.ghost { background: transparent; color: var(--vscode-button-secondaryForeground, #fff); border: 1px solid rgba(255,255,255,0.08); }
+  .wb-btn.ghost { background: transparent; color: var(--vscode-button-secondaryForeground, #fff); border: 1px solid var(--vscode-widget-border, rgba(128,128,128,0.15)); }
   .wb-btn.ghost:hover:not(:disabled) { background: var(--vscode-button-secondaryHoverBackground, #45494e); }
   .wb-btn.is-busy { gap: 6px; }
 
@@ -428,6 +428,19 @@ function hideReaders() {
   for (var r of document.querySelectorAll('.wb-reader')) r.classList.remove('active');
   document.getElementById('placeholder').hidden = false;
 }
+
+window.addEventListener('message', function(e) {
+  var msg = e.data;
+  if (msg && msg.type === 'focusItem' && msg.id) {
+    var item = document.querySelector('.wb-item[data-id="' + msg.id + '"]');
+    if (item) {
+      var q = item.getAttribute('data-queue');
+      if (q && q !== currentQueue) filterQueue(q, false);
+      selectItem(item);
+      item.scrollIntoView({ block: 'nearest' });
+    }
+  }
+});
 
 document.addEventListener('click', function(e) {
   var t = e.target && e.target.closest ? e.target.closest('button[data-action]') : null;

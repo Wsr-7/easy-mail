@@ -112,6 +112,13 @@ describe("handleWebviewMessage", () => {
     assert.equal((ctx.refresh as any).mock.callCount(), 1);
   });
 
+  it("dispatches openInWorkbench with mailId", async () => {
+    const ctx = stubContext();
+    await handleWebviewMessage(ctx, { type: "openInWorkbench", mailId: "m-42" });
+    assert.equal((ctx.openWorkbench as any).mock.callCount(), 1);
+    assert.deepEqual((ctx.openWorkbench as any).mock.calls[0].arguments, ["m-42"]);
+  });
+
   it("dispatches requestLanguageChange", async () => {
     const ctx = stubContext();
     await handleWebviewMessage(ctx, { type: "requestLanguageChange", config: { outputLanguage: "zh-CN" } });

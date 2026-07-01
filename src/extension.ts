@@ -149,10 +149,13 @@ class EasyMailApp {
     await this.log("guide:opened", {});
   }
 
-  public async openWorkbench(): Promise<void> {
+  public async openWorkbench(focusId?: string): Promise<void> {
     if (this.workbenchPanel) {
       this.workbenchPanel.reveal(vscode.ViewColumn.One);
       this.workbenchPanel.webview.html = await this.getWorkbenchHtml();
+      if (focusId) {
+        this.workbenchPanel.webview.postMessage({ type: "focusItem", id: focusId });
+      }
       return;
     }
     const panel = vscode.window.createWebviewPanel(
@@ -170,6 +173,9 @@ class EasyMailApp {
       this.workbenchPanel = null;
     });
     panel.webview.html = await this.getWorkbenchHtml();
+    if (focusId) {
+      panel.webview.postMessage({ type: "focusItem", id: focusId });
+    }
     await this.log("workbench:opened", {});
   }
 
@@ -846,7 +852,7 @@ class EasyMailApp {
       openSettings: () => this.openSettings(),
       openPromptConfig: () => this.openPromptConfig(),
       clearLocalCache: () => this.clearLocalCache(),
-      openWorkbench: () => this.openWorkbench()
+      openWorkbench: (focusId) => this.openWorkbench(focusId)
     };
   }
 
