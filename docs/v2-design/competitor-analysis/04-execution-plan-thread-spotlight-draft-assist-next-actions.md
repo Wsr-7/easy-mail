@@ -376,16 +376,16 @@ Goal:
 - Show existing fields clearly.
 - Do not add source jump complexity.
 
-Status: [ ] Not started
+Status: [X] Done
 
 Steps:
 
-- [ ] A1. Inspect current thread rendering paths.
-- [ ] A2. Add `Thread Spotlight` section to Workbench thread detail.
-- [ ] A3. Expand Dashboard thread summary to show key fields where space allows.
-- [ ] A4. Update thread report rendering.
-- [ ] A5. Add or update tests.
-- [ ] A6. Run validation.
+- [X] A1. Inspect current thread rendering paths.
+- [X] A2. Add `Thread Spotlight` section to Workbench thread detail.
+- [X] A3. Expand Dashboard thread summary to show key fields where space allows.
+- [X] A4. Update thread report rendering.
+- [X] A5. Add or update tests.
+- [X] A6. Run validation.
 
 Acceptance goal:
 
@@ -642,14 +642,14 @@ Completion Notes:
 - Tests run:
   - `npm run compile`: pass
   - `npm test -- --test-name-pattern=renderThreadAnalysisSummary`: pass, 228 tests total
-- Commit: (pending)
+- Commit: `71baf24`
 - Handover: See `Handover - 2026-07-02 - Claude Opus`
 
 ---
 
 ### A4. Update thread report rendering
 
-Status: [ ] Not started
+Status: [X] Done
 
 Goal:
 
@@ -663,16 +663,17 @@ Acceptance criteria:
 
 Completion Notes:
 
-- Status:
-- Files changed:
-- Tests run:
-- Handover:
+- Status: Done — no code changes needed
+- Files changed: none
+- Reason: `buildThreadReport` in `src/lib/report-thread.ts` already renders all Spotlight fields (currentStatus, keyDecisions, openQuestions, actionItems, waitingOn, risks, needMyReply, suggestedAction, partialContext, evidence, draftReply) and already omits empty sections via `appendList` and conditional checks. Report structure is aligned with Spotlight.
+- Tests run: existing `report-thread.test.ts` tests pass (covered by full suite)
+- Handover: See `Handover - 2026-07-02 - Claude Opus`
 
 ---
 
 ### A5. Add or update tests
 
-Status: [ ] Not started
+Status: [X] Done
 
 Recommended tests:
 
@@ -688,15 +689,19 @@ Acceptance criteria:
 
 Completion Notes:
 
-- Status:
-- Tests added/changed:
-- Handover:
+- Status: Done — all recommended tests already exist
+- Tests coverage:
+  - Workbench Spotlight fields (decisions, questions hidden when empty, waitingOn, needMyReply, partialContext): `workbench-render.test.ts` line 124 "renders thread spotlight fields"
+  - Dashboard truncation (actionItems, risks, openQuestions truncated to 2, overflow, empty sections hidden): `dashboard-render.test.ts` — 10 tests added in A3
+  - Report empty section omission: `report-thread.test.ts` line 78 "handles empty collections"
+- No additional test code needed
+- Handover: See `Handover - 2026-07-02 - Claude Opus`
 
 ---
 
 ### A6. Run validation
 
-Status: [ ] Not started
+Status: [X] Done
 
 Commands:
 
@@ -715,10 +720,12 @@ Acceptance criteria:
 
 Completion Notes:
 
-- Status:
+- Status: Done
 - Commands run:
-- Results:
-- Handover:
+  - `npm run compile`: pass
+  - `npm test`: pass, 228 tests, 0 fail
+- Results: Full suite green
+- Handover: See `Handover - 2026-07-02 - Claude Opus`
 
 ---
 
