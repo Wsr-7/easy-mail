@@ -200,7 +200,7 @@ export const LABELS: Record<Locale, DashboardLabels> = {
     toolbar: {
       pullMail: "Fetch New",
       loadMore: "More History",
-      sample: "Sample",
+      sample: "Sample Data",
       analyze: "Analyze Next Batch",
       analyzeSelected: "Analyze Selected",
       analyzeAllAllowed: "Analyze All Allowed",

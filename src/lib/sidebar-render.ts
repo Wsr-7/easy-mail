@@ -394,6 +394,10 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
   .sb-batch-select:disabled { opacity: 0.35; cursor: not-allowed; }
   .sb-batch-select:hover:not(:disabled) { background: var(--vscode-button-secondaryHoverBackground, #45494e); }
   .sb-batch-select:focus { outline: 1px solid var(--vscode-focusBorder, #007fd4); }
+  .sb-batch-select option {
+    background: var(--vscode-dropdown-background, var(--vscode-input-background, #3c3c3c));
+    color: var(--vscode-dropdown-foreground, var(--vscode-input-foreground, #ccc));
+  }
   .sb-model-hint {
     font-size: 10px; color: var(--vscode-editorWarning-foreground, #cca700);
     padding: 2px 10px 0; display: flex; align-items: center; gap: 4px;
@@ -549,6 +553,10 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
     background-position: right 6px center;
     background-size: 10px 6px;
     cursor: pointer;
+  }
+  .sb-settings select option {
+    background: var(--vscode-dropdown-background, var(--vscode-input-background, #3c3c3c));
+    color: var(--vscode-dropdown-foreground, var(--vscode-input-foreground, #ccc));
   }
   .sb-settings input[type="number"] {
     -moz-appearance: textfield;

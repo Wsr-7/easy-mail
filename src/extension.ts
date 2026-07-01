@@ -153,16 +153,18 @@ class EasyMailApp {
 
   public async openWorkbench(focusId?: string): Promise<void> {
     if (this.workbenchPanel) {
+      if (!focusId) {
+        this.workbenchPanel.dispose();
+        return;
+      }
       this.workbenchPanel.reveal(vscode.ViewColumn.One);
       this.workbenchPanel.webview.html = await this.getWorkbenchHtml();
-      if (focusId) {
-        this.workbenchPanel.webview.postMessage({ type: "focusItem", id: focusId });
-      }
+      this.workbenchPanel.webview.postMessage({ type: "focusItem", id: focusId });
       return;
     }
     const panel = vscode.window.createWebviewPanel(
       "easyMail.workbench",
-      "Easy Mail - Workbench",
+      "EasyMail",
       vscode.ViewColumn.One,
       { enableScripts: true, retainContextWhenHidden: true }
     );
