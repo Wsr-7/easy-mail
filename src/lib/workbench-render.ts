@@ -82,6 +82,7 @@ function renderThreadDetail(
       <div class="wb-tl-head">
         <strong>${escapeHtml(msg.from || msg.senderEmail || "")}</strong>
         <span class="wb-tl-time">${escapeHtml(msg.receivedTime || msg.sentTime || "")}</span>
+        ${msg.mailId ? `<button class="wb-tl-action" data-action="openInOutlook" data-mail-id="${escapeAttr(msg.mailId)}" title="${escapeAttr(labels.card.openInOutlook)}">↗</button>` : ""}
       </div>
       <div class="wb-tl-body">${escapeHtml(msg.bodyDelta || msg.bodyPreview || "")}</div>
     </div>`
@@ -259,9 +260,12 @@ export function renderWorkbenchHtml(input: DashboardRenderInput): string {
   .wb-timeline-section > h4 { font-size: 13px; font-weight: 600; margin-bottom: 12px; opacity: 0.7; }
   .wb-tl-item { padding: 10px 0 10px 14px; border-left: 2px solid var(--vscode-panel-border, rgba(128,128,128,0.25)); margin-bottom: 2px; }
   .wb-tl-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-  .wb-tl-head strong { font-size: 12px; }
-  .wb-tl-time { font-size: 11px; opacity: 0.5; }
-  .wb-tl-body { font-size: 12px; line-height: 1.6; white-space: pre-wrap; opacity: 0.85; }
+  .wb-tl-head strong { font-size: 12px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .wb-tl-time { font-size: 11px; opacity: 0.5; flex-shrink: 0; }
+  .wb-tl-action { flex-shrink: 0; width: 22px; height: 22px; padding: 0; border-radius: 4px; background: transparent; color: var(--vscode-foreground, #ccc); opacity: 0; font-size: 12px; transition: opacity 0.15s; }
+  .wb-tl-item:hover .wb-tl-action { opacity: 0.5; }
+  .wb-tl-action:hover { opacity: 1 !important; background: var(--vscode-list-hoverBackground, rgba(128,128,128,0.15)); }
+  .wb-tl-body { font-size: 12px; line-height: 1.6; white-space: pre-wrap; padding: 8px 12px; margin-top: 4px; border-radius: 4px; background: var(--vscode-textBlockQuote-background, rgba(128,128,128,0.08)); color: var(--vscode-editor-foreground, #ccc); }
 
   /* Draft box */
   .draft-box { position: relative; margin-top: 8px; }
@@ -295,7 +299,7 @@ function post(type, extra) { vscode.postMessage(Object.assign({ type: type }, ex
 function showReader(id) {
   hideReaders();
   for (var r of document.querySelectorAll('.wb-reader')) {
-    if (r.getAttribute('data-id') === id) { r.classList.add('active'); document.getElementById('placeholder').hidden = true; return; }
+    if (r.getAttribute('data-id') === id) { r.classList.add('active'); document.getElementById('placeholder').hidden = true; document.getElementById('reader').scrollTop = 0; return; }
   }
 }
 

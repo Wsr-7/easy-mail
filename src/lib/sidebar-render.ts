@@ -1,4 +1,5 @@
 import type { AnalysisResult } from "./analysis-schema";
+import { classificationFor, normalizeClassificationCache, type ClassificationCache } from "./classification";
 import { getLocaleFromConfig, mergeStringLists, parseFolders } from "./config-utils";
 import { getLabels, buildCategoryLabels, type DashboardLabels } from "./dashboard-labels";
 import { filterVisibleThreadsForDashboard } from "./dashboard-state";
@@ -7,7 +8,7 @@ import { selectConfiguredModel } from "./llm-provider";
 import { emptyMailIndex, folderOldestReceivedTimes, type StoredMail } from "./mail-store";
 import { normalizePromptConfig } from "./prompt-config";
 import { emptyThreadStore, type ThreadStore } from "./thread-store";
-import { renderButtonSpinner, formatPriority, renderModelOptions, renderRangeValueControl, renderClassificationOptions, formatAnalyzeNextLabel, type DashboardRenderInput } from "./dashboard-render";
+import { renderButtonSpinner, formatPriority, formatClassification, renderModelOptions, renderRangeValueControl, renderClassificationOptions, formatAnalyzeNextLabel, type DashboardRenderInput } from "./dashboard-render";
 import { emptyMeetingStore, type StoredMeeting } from "./meeting-store";
 
 const QUEUE_ORDER = [
@@ -61,21 +62,29 @@ function shortTime(t: string): string {
   return m ? m[1] : "";
 }
 
-function renderCompactMailRow(item: StoredMail, queue: string): string {
+function classificationBadge(mailId: string, classifications: ClassificationCache): string {
+  const cls = classificationFor(mailId, classifications);
+  if (!cls) return "";
+  const label = formatClassification(cls);
+  if (!label || label === "-") return "";
+  return `<span class="sb-cls-badge">${escapeHtml(label)}</span>`;
+}
+
+function renderCompactMailRow(item: StoredMail, queue: string, classifications: ClassificationCache): string {
   const time = shortTime(item.receivedTime || "");
   const meta = [item.from || "", time].filter(Boolean).join(" · ");
   return `<div class="sb-row" data-queue="${escapeAttr(queue)}" data-mail-id="${escapeAttr(item.mailId)}" onclick="openItem('${escapeAttr(item.mailId)}')">
     <div class="sb-subject" title="${escapeAttr(item.subject || item.mailId)}">${escapeHtml(item.subject || item.mailId)}</div>
-    <div class="sb-line2">${escapeHtml(meta)}</div>
+    <div class="sb-line2"><span class="sb-line2-meta">${escapeHtml(meta)}</span>${classificationBadge(item.mailId, classifications)}</div>
   </div>`;
 }
 
-function renderCompactAnalysisRow(item: AnalysisResult["items"][number], queue: string, labels: DashboardLabels): string {
+function renderCompactAnalysisRow(item: AnalysisResult["items"][number], queue: string, labels: DashboardLabels, classifications: ClassificationCache): string {
   const time = shortTime(item.receivedTime || "");
   const meta = [item.sender || "", time].filter(Boolean).join(" · ");
   return `<div class="sb-row" data-queue="${escapeAttr(queue)}" data-mail-id="${escapeAttr(item.mailId)}" onclick="openItem('${escapeAttr(item.mailId)}')">
     <div class="sb-subject" title="${escapeAttr(item.subject || item.mailId)}">${escapeHtml(item.subject || item.mailId)}</div>
-    <div class="sb-line2"><span class="sb-line2-meta">${escapeHtml(meta)}</span><span class="sb-badge">${escapeHtml(formatPriority(item.priority, labels))}</span></div>
+    <div class="sb-line2"><span class="sb-line2-meta">${escapeHtml(meta)}</span>${classificationBadge(item.mailId, classifications)}<span class="sb-badge">${escapeHtml(formatPriority(item.priority, labels))}</span></div>
   </div>`;
 }
 
@@ -161,12 +170,14 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
     </button>`;
   }).filter(Boolean).join("");
 
-  const pendingRows = queue.pending.map((item) => renderCompactMailRow(item, "pending")).join("");
-  const blockedRows = queue.blocked.map((item) => renderCompactMailRow(item, "blocked")).join("");
+  const classifications = input.classifications || normalizeClassificationCache({});
+
+  const pendingRows = queue.pending.map((item) => renderCompactMailRow(item, "pending", classifications)).join("");
+  const blockedRows = queue.blocked.map((item) => renderCompactMailRow(item, "blocked", classifications)).join("");
   const analysisRows = state.categories.map((cat) =>
-    cat.items.map((item) => renderCompactAnalysisRow(item, cat.id, labels)).join("")
+    cat.items.map((item) => renderCompactAnalysisRow(item, cat.id, labels, classifications)).join("")
   ).join("");
-  const ignoredPendingRows = (queue.ignoredPending || []).map((item) => renderCompactMailRow(item, "ignored")).join("");
+  const ignoredPendingRows = (queue.ignoredPending || []).map((item) => renderCompactMailRow(item, "ignored", classifications)).join("");
   const threadRows = [...(visibleThreadStore.items || [])].sort((a, b) =>
     String(b.lastTime || "").localeCompare(String(a.lastTime || ""))
   ).map((thread) => renderCompactThreadRow(thread)).join("");
@@ -343,6 +354,7 @@ export function renderSidebarHtml(input: DashboardRenderInput): string {
   .sb-line2 { display: flex; align-items: center; gap: 6px; margin-top: 1px; }
   .sb-line2-meta { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; opacity: 0.55; }
   .sb-badge { font-size: 10px; padding: 1px 6px; border-radius: 8px; white-space: nowrap; flex-shrink: 0; background: var(--vscode-badge-background, #4d4d4d); color: var(--vscode-badge-foreground, #fff); }
+  .sb-cls-badge { font-size: 9px; padding: 1px 5px; border-radius: 4px; white-space: nowrap; flex-shrink: 0; opacity: 0.6; border: 1px solid var(--vscode-widget-border, rgba(128,128,128,0.2)); color: var(--vscode-foreground, #ccc); }
 
   /* ── Meeting status badges ── */
   .sb-mtg-warn { background: var(--vscode-editorWarning-foreground, #cca700); color: #000; }
