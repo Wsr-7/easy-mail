@@ -64,37 +64,28 @@ describe("renderWorkbenchHtml", () => {
     assert.ok(html.includes("</html>"));
   });
 
-  it("renders two-column layout", () => {
+  it("renders full-width reading pane without list column", () => {
     const html = renderWorkbenchHtml(stubInput());
-    assert.ok(html.includes("wb-cols"));
-    assert.ok(html.includes("wb-left"));
-    assert.ok(html.includes("wb-right"));
-    assert.ok(html.includes("wb-tabs"));
+    assert.ok(html.includes("wb-pane"));
+    assert.ok(!html.includes("wb-left"), "no left column");
+    assert.ok(!html.includes("wb-cols"), "no two-column layout");
+    assert.ok(!html.includes("wb-tabs"), "no tabs");
   });
 
-  it("does not render top bar action buttons (actions live in sidebar)", () => {
+  it("renders placeholder prompting sidebar selection", () => {
     const html = renderWorkbenchHtml(stubInput());
-    assert.ok(!html.includes("wb-bar"), "workbench should not have top action bar");
-    assert.ok(!html.includes("post('pullMail')"), "workbench should not have pullMail button");
-    assert.ok(!html.includes("post('analyze')"), "workbench should not have analyze button");
+    assert.ok(html.includes("wb-placeholder"));
+    assert.ok(html.includes("Select an item from sidebar"));
   });
 
-  it("renders queue tabs for non-empty queues", () => {
-    const input = stubInput({
-      queue: { pending: [stubMail()], blocked: [], analysed: [], allowed: [], ignoredPending: [] }
-    });
-    const html = renderWorkbenchHtml(input);
-    assert.ok(html.includes('data-queue-id="pending"'));
-    assert.ok(html.includes("filterQueue"));
-  });
-
-  it("renders list items for pending mails", () => {
+  it("renders detail panels for pending mails", () => {
     const input = stubInput({
       queue: { pending: [stubMail({ mailId: "m1", subject: "Hello" })], blocked: [], analysed: [], allowed: [], ignoredPending: [] }
     });
     const html = renderWorkbenchHtml(input);
-    assert.ok(html.includes('data-queue="pending"'));
+    assert.ok(html.includes('data-id="m1"'));
     assert.ok(html.includes("Hello"));
+    assert.ok(html.includes("wb-detail-card"));
   });
 
   it("renders detail panels for analysis items", () => {
@@ -108,7 +99,7 @@ describe("renderWorkbenchHtml", () => {
     assert.ok(html.includes("Urgent task"));
   });
 
-  it("renders thread items", () => {
+  it("renders thread detail panels", () => {
     const input = stubInput({
       threadStore: {
         generatedAt: "", lastBuiltAt: "",
@@ -125,25 +116,20 @@ describe("renderWorkbenchHtml", () => {
       }
     });
     const html = renderWorkbenchHtml(input);
-    assert.ok(html.includes('data-queue="threads"'));
     assert.ok(html.includes("Thread Subject"));
+    assert.ok(html.includes('data-id="t1"'));
   });
 
-  it("includes client-side selection JavaScript", () => {
+  it("handles focusItem message via client-side JS", () => {
     const html = renderWorkbenchHtml(stubInput());
-    assert.ok(html.includes("filterQueue"));
-    assert.ok(html.includes("selectItem"));
+    assert.ok(html.includes("focusItem"));
     assert.ok(html.includes("showReader"));
   });
 
-  it("still renders thread analyze button with busy state", () => {
-    const html = renderWorkbenchHtml(stubInput({ isBusy: true, busyKind: "analyzeThread" }));
-    assert.ok(!html.includes("wb-bar"), "no top bar even when busy");
-  });
-
-  it("renders placeholder for reading pane", () => {
+  it("does not include filterQueue or selectItem (no list column)", () => {
     const html = renderWorkbenchHtml(stubInput());
-    assert.ok(html.includes("wb-placeholder"));
+    assert.ok(!html.includes("filterQueue"));
+    assert.ok(!html.includes("selectItem"));
   });
 
   it("shows restore button for ignored items instead of ignore", () => {
@@ -158,7 +144,7 @@ describe("renderWorkbenchHtml", () => {
     assert.ok(!html.includes('data-action="ignore" data-mail-id="ig1"'));
   });
 
-  it("renders meeting items in meetings queue", () => {
+  it("renders meeting detail panels", () => {
     const mtg: StoredMeetingItem = {
       meetingId: "mtg-1", entryId: "e-mtg-1", subject: "Standup", organizer: "Alice",
       start: "2026-07-01 09:00", end: "2026-07-01 09:30", location: "Room A",
@@ -168,7 +154,6 @@ describe("renderWorkbenchHtml", () => {
     };
     const input = stubInput({ meetingStore: { generatedAt: "", lastPullAt: "", items: [mtg] } });
     const html = renderWorkbenchHtml(input);
-    assert.ok(html.includes('data-queue="meetings"'));
     assert.ok(html.includes("Standup"));
     assert.ok(html.includes("Alice"));
     assert.ok(html.includes("openMeetingInOutlook"));
