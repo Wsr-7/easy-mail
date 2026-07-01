@@ -599,6 +599,7 @@ Completion Notes:
 - Tests run:
   - `npm run compile`: pass
   - `npm test -- --test-name-pattern=renderWorkbenchHtml`: pass, 218 tests reported passing
+- Commit: `ec4071a757c4e3d386bd080c216da263b5f0c2a6`
 - Handover: See `Handover - 2026-07-02 00:53 - Codex`.
 
 ---
@@ -1870,6 +1871,7 @@ Changed:
 - Added Workbench `Thread Spotlight` rendering in `src/lib/workbench-render.ts`.
 - Added thread labels for Spotlight fields in `src/lib/dashboard-labels.ts`.
 - Added Workbench render coverage for Spotlight fields, empty section omission, partial-context warning, and existing timeline Outlook open button.
+- Commit: `ec4071a757c4e3d386bd080c216da263b5f0c2a6`
 
 Validated:
 - `npm run compile`: pass
