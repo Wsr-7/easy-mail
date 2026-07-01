@@ -5,7 +5,7 @@ import { renderEasyMailGuideHtml } from "../lib/guide-webview";
 test("renderEasyMailGuideHtml renders guide content and command buttons", () => {
   const html = renderEasyMailGuideHtml({
     locale: "zh-CN",
-    version: "0.1.0",
+    version: "0.2.0",
     stats: {
       pulled: 4,
       pending: 2,

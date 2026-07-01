@@ -17,7 +17,7 @@ try {
   fs.writeFileSync(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`, "utf8");
   fs.writeFileSync(configPath, `${JSON.stringify(configJson, null, 2)}\n`, "utf8");
   cp.execSync("npm run compile", { cwd: root, stdio: "inherit", shell: true });
-  cp.execSync("npx vsce package --out releases/easy-mail-dev-0.1.0.vsix", { cwd: root, stdio: "inherit", shell: true });
+  cp.execSync("npx vsce package --out releases/easy-mail-dev-0.2.0.vsix", { cwd: root, stdio: "inherit", shell: true });
 } finally {
   fs.writeFileSync(packagePath, packageRaw, "utf8");
   fs.writeFileSync(configPath, configRaw, "utf8");
