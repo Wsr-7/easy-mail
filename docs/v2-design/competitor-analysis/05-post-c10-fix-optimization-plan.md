@@ -138,7 +138,7 @@ Rationale:
 
 ### P0.1 Fix Outlook compose draft encoding and empty draft guard
 
-Status: [ ] Not started
+Status: [~] Implementation done; manual Outlook validation pending
 
 Goal:
 
@@ -193,12 +193,22 @@ Acceptance criteria:
 
 Completion Notes:
 
-- Status:
+- Status: Implementation done; not marked `[X]` because manual Outlook validation is still required.
 - Files changed:
+  - `scripts/compose-outlook-mail.vbs` — reads `--body-file` as UTF-8 through `ADODB.Stream` instead of `OpenTextFile(..., -1)`.
+  - `src/lib/message-handler.ts` — blocks empty/whitespace `composeMail` before calling `composeOutlookMail`.
+  - `src/test/message-handler.test.ts` — covers empty compose draft guard and keeps non-empty forward dispatch covered.
 - Tests:
+  - `npm run compile`: pass.
+  - `node --test out/test/message-handler.test.js`: pass, 29 tests.
+  - `npm test`: pass, 259 tests.
+  - `cscript.exe //nologo scripts/compose-outlook-mail.vbs --help`: pass; script parses and prints usage.
 - Manual validation:
+  - Not run in this agent session. Required: verify Chinese and English draft bodies render correctly in classic Outlook Reply / Reply All / Forward, and no email is sent automatically.
 - Known issues:
+  - C10 and the cross-task Outlook compose acceptance remain open until manual validation passes.
 - Commit:
+  - Implementation: `04d96a5029b615d058a7bb28221863d80e432189`
 
 ---
 
@@ -727,7 +737,7 @@ Known caution:
 
 Use this section to summarize completed task commits:
 
-- P0.1:
+- P0.1: implementation `04d96a5029b615d058a7bb28221863d80e432189`; manual Outlook validation pending.
 - P0.2:
 - P0.3:
 - P0.4:
@@ -742,6 +752,70 @@ Use this section to summarize completed task commits:
 ---
 
 ## 8. Handover Log
+
+#### Handover - 2026-07-02 - Codex (P0.1 start)
+
+Status: In progress
+
+Changed:
+- Claimed `P0.1 Fix Outlook compose draft encoding and empty draft guard`.
+
+Validated:
+- Read this plan completely.
+- Read latest handover.
+- Ran `git status --short --branch`: branch `v3`, ahead 1; unrelated dirty file `agents.md`.
+- User decision recorded: `Auto Analyze Enabled` should be removed from `package.json` settings when P0.3 starts.
+
+Known issues:
+- No source code changed yet in this checkpoint.
+- Manual Outlook validation is still required after implementation.
+
+Last safe stopping point:
+- Before P0.1 code inspection and test edits.
+
+Uncommitted changes / dirty files:
+- `docs/v2-design/competitor-analysis/05-post-c10-fix-optimization-plan.md`
+- `agents.md` unrelated pre-existing dirty file.
+
+Next recommended step:
+- Inspect compose dispatch paths, add failing empty-draft test, then implement the smallest shared guard and VBS UTF-8 read fix.
+
+---
+
+#### Handover - 2026-07-02 - Codex (P0.1 implementation)
+
+Status: In progress — implementation committed; manual Outlook validation pending
+
+Changed:
+- Added empty/whitespace draft guard to shared `composeMail` message handling.
+- Changed compose VBS body-file read to `ADODB.Stream` with `Charset = "utf-8"`.
+- Updated compose message-handler tests.
+- Commit: `04d96a5029b615d058a7bb28221863d80e432189`
+
+Validated:
+- RED: `node --test out/test/message-handler.test.js` failed before implementation because empty compose still called `composeOutlookMail`.
+- `npm run compile`: pass.
+- `node --test out/test/message-handler.test.js`: pass, 29 tests.
+- `npm test`: pass, 259 tests.
+- `cscript.exe //nologo scripts/compose-outlook-mail.vbs --help`: pass.
+
+Known issues:
+- Manual Outlook validation was not run here.
+- P0.1 must remain `[~]` until classic Outlook confirms Chinese/English draft prefill is readable for Reply / Reply All / Forward.
+- `agents.md` remains unrelated dirty state.
+
+Last safe stopping point:
+- P0.1 implementation is committed and test-covered.
+- It is safe to continue with P0.2 while manual Outlook validation is pending, but do not close C10/Cross-Task compose acceptance yet.
+
+Uncommitted changes / dirty files:
+- `docs/v2-design/competitor-analysis/05-post-c10-fix-optimization-plan.md`
+- `agents.md` unrelated pre-existing dirty file.
+
+Next recommended step:
+- Start `P0.2 Add manual-confirm analyze action for security-gated mail`, unless manual Outlook validation is available immediately.
+
+---
 
 #### Handover - 2026-07-02 - Codex (Plan creation)
 
