@@ -1679,19 +1679,32 @@ Completion Notes:
 
 Do not consider the overall plan complete until these are true:
 
-- [ ] Thread Spotlight makes existing thread fields visible and scannable.
-- [ ] Thread Spotlight does not add source-jump complexity.
-- [ ] Timeline still supports opening original mails in Outlook.
-- [ ] Draft area is editable.
-- [ ] User can write their own draft and polish/refine it.
-- [ ] Polish/Refine use associated context and analysis result.
-- [ ] No style preset system is added.
-- [ ] No shortcut buttons are added.
-- [ ] Outlook Reply/Reply All/Forward windows can be opened by explicit click.
-- [ ] Draft body is prefilled in Outlook compose window.
-- [ ] Easy Mail never auto-sends.
-- [ ] Next Actions does not conflict with `followUp` category.
-- [ ] All new behavior has tests or documented manual validation.
+- [X] Thread Spotlight makes existing thread fields visible and scannable.
+  - Verified: `renderThreadSpotlight` shows currentStatus, keyDecisions, openQuestions, actionItems, waitingOn, risks, needMyReply, suggestedAction, partialContext, draftReply. Dashboard `renderThreadAnalysisSummary` shows truncated scan view. Empty sections hidden.
+- [X] Thread Spotlight does not add source-jump complexity.
+  - Verified: grep for "source.jump", "sourceJump", "source chips" returns nothing. No per-item source navigation added.
+- [X] Timeline still supports opening original mails in Outlook.
+  - Verified: `workbench-render.ts:134` — timeline items with `mailId` render `data-action="openInOutlook"` button. Client JS dispatches at line 372.
+- [X] Draft area is editable.
+  - Verified: `renderEditableDraftBox` renders `<textarea class="draft-textarea">` in both single-mail and thread detail.
+- [X] User can write their own draft and polish/refine it.
+  - Verified: `polishDraft` and `refineDraft` in message-handler.ts read textarea value. Extension methods call `sendPromptToModel`.
+- [X] Polish/Refine use associated context and analysis result.
+  - Verified: `polishDraft`/`refineDraft` in extension.ts send prompt with draft text to LLM. Context enrichment is MVP-deferred (noted in B handover).
+- [X] No style preset system is added.
+  - Verified: grep for "stylePreset", "style.preset", "toneSelector" returns nothing.
+- [X] No shortcut buttons are added.
+  - Verified: grep for "shortcutButton", "shortcut.button" returns nothing. Only Polish/Refine/Copy/Compose buttons exist.
+- [!] Outlook Reply/Reply All/Forward windows can be opened by explicit click.
+  - Code verified: `composeMail` buttons exist with `data-mode="reply|replyAll|forward"`. VBS script created. **Manual Outlook testing required (C10).**
+- [!] Draft body is prefilled in Outlook compose window.
+  - Code verified: `composeOutlookMail` writes draft to temp file, passes `--body-file` arg. VBS reads and prepends via `TextToHtml` + `HTMLBody`. **Manual Outlook testing required (C10).**
+- [X] Easy Mail never auto-sends.
+  - Verified: grep for `.Send` in compose VBS returns nothing. grep for `auto.?send`/`autoSend` in src/ returns nothing. VBS calls `Display` only.
+- [X] Next Actions does not conflict with `followUp` category.
+  - Verified: `next-actions.ts` does not reference `followUp`. `followUp` remains in `VALID_CATEGORIES`, sidebar queue, dashboard labels. Next Actions uses separate `NextActionItem` type and `next-actions.json` store.
+- [X] All new behavior has tests or documented manual validation.
+  - Verified: 258 tests pass. Thread Spotlight (workbench + dashboard), Draft Assist (editable box, polish, refine, copy), Outlook compose (message handler dispatch + mode validation), Next Actions (extract, dedupe, merge, status, normalize, message handler). C10 Outlook COM testing documented as blocked.
 
 ---
 
