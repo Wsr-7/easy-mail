@@ -241,9 +241,16 @@ describe("composeMail", () => {
 
   it("dispatches forward mode", async () => {
     const ctx = stubContext();
-    await handleWebviewMessage(ctx, { type: "composeMail", mode: "forward", draftText: "", itemId: "m1" });
+    await handleWebviewMessage(ctx, { type: "composeMail", mode: "forward", draftText: "Hi", itemId: "m1" });
     assert.equal((ctx.composeOutlookMail as any).mock.callCount(), 1);
-    assert.deepEqual((ctx.composeOutlookMail as any).mock.calls[0].arguments, ["forward", "", "m1"]);
+    assert.deepEqual((ctx.composeOutlookMail as any).mock.calls[0].arguments, ["forward", "Hi", "m1"]);
+  });
+
+  it("warns on empty draft", async () => {
+    const ctx = stubContext();
+    await handleWebviewMessage(ctx, { type: "composeMail", mode: "forward", draftText: "  ", itemId: "m1" });
+    assert.equal((ctx.composeOutlookMail as any).mock.callCount(), 0);
+    assert.equal((ctx.showWarning as any).mock.callCount(), 1);
   });
 
   it("warns on unsupported mode", async () => {

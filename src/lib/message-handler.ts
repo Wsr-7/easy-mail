@@ -93,7 +93,12 @@ export async function handleWebviewMessage(ctx: MessageHandlerContext, message: 
       ctx.showWarning("Unsupported compose mode.");
       return;
     }
-    await ctx.composeOutlookMail(mode, String(typed.draftText || ""), String(typed.itemId || ""));
+    const draftText = String(typed.draftText || "");
+    if (!draftText.trim()) {
+      ctx.showWarning("Draft is empty. Write or generate a draft first.");
+      return;
+    }
+    await ctx.composeOutlookMail(mode, draftText, String(typed.itemId || ""));
     return;
   }
 

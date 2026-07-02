@@ -62,13 +62,19 @@ End Sub
 
 Function ReadBodyFile(ByVal filePath)
   On Error Resume Next
-  Dim fso, stream, content
+  Dim fso
   Set fso = CreateObject("Scripting.FileSystemObject")
   If Not fso.FileExists(filePath) Then
     Fail "Body file not found: " & filePath
   End If
-  Set stream = fso.OpenTextFile(filePath, 1, False, -1)
-  content = stream.ReadAll
+
+  Dim stream, content
+  Set stream = CreateObject("ADODB.Stream")
+  stream.Type = 2
+  stream.Charset = "utf-8"
+  stream.Open
+  stream.LoadFromFile filePath
+  content = stream.ReadText
   stream.Close
   If Err.Number <> 0 Then
     Fail "Unable to read body file: " & Err.Description
