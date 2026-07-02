@@ -1,7 +1,7 @@
 # Easy Mail Execution Plan: Thread Spotlight, Draft Assist, Next Actions
 
 Created: 2026-07-01  
-Status: Draft for implementation  
+Status: Implemented through D10; C10 manual validation failed and follow-up fixes are tracked in `05-post-c10-fix-optimization-plan.md`  
 
 ---
 
@@ -434,7 +434,7 @@ Goal:
 
 - Let users move from Easy Mail draft to Outlook compose window without copy/paste.
 
-Status: [~] In progress (C10 manual testing blocked)
+Status: [!] C10 manual validation failed; follow-up fixes tracked in `05-post-c10-fix-optimization-plan.md`
 
 Steps:
 
@@ -1347,14 +1347,15 @@ Completion Notes:
 
 ### C10. Manual Outlook validation
 
-Status: [!] Blocked — requires classic Outlook desktop client for manual testing
+Status: [!] Failed — user-tested latest package in classic Outlook; compose opens, but non-empty draft body is mojibake
 
 Manual test matrix:
 
-- [ ] Reply to a normal email.
-- [ ] Reply All to a multi-recipient email.
-- [ ] Forward a normal email.
-- [ ] Draft with multiple paragraphs.
+- [X] Reply to a normal email opens an Outlook compose window.
+- [X] Reply All to a multi-recipient email opens an Outlook compose window.
+- [X] Forward a normal email opens an Outlook compose window.
+- [!] Draft with multiple paragraphs is not acceptable: non-empty draft body becomes mojibake after compose opens.
+- [!] Draft with Chinese or English text is not acceptable: non-empty body is garbled, for example `楈䄠楬散...`.
 - [ ] Draft with special characters such as `<`, `>`, `&`.
 - [ ] Email with existing signature behavior.
 - [ ] Email with long quoted history.
@@ -1368,11 +1369,17 @@ Acceptance criteria:
 
 Completion Notes:
 
-- Status:
-- Environment:
+- Status: Failed manual validation; C10 acceptance is not met.
+- Environment: User-tested the latest package with classic Outlook on 2026-07-02.
 - Results:
+  - Empty draft compose buttons currently open Outlook compose windows.
+  - Non-empty draft compose buttons also open Outlook compose windows, but the inserted body is mojibake for both Chinese and English drafts.
+  - No evidence was reported that mail is sent automatically.
 - Known issues:
-- Handover:
+  - Likely root cause: extension writes the temporary draft body as UTF-8, while `scripts/compose-outlook-mail.vbs` reads it as UTF-16/Unicode via `OpenTextFile(..., -1)`.
+  - Empty drafts should not open Reply / Reply All / Forward; the UI should instead guide the user to generate or write a draft first.
+  - Signature and long quoted history still need retesting after the encoding fix.
+- Handover: Continue in `docs/v2-design/competitor-analysis/05-post-c10-fix-optimization-plan.md`, starting with `P0.1 Fix Outlook compose draft encoding and empty draft guard`.
 
 ---
 
@@ -1697,14 +1704,14 @@ Do not consider the overall plan complete until these are true:
   - Verified: grep for "shortcutButton", "shortcut.button" returns nothing. Only Polish/Refine/Copy/Compose buttons exist.
 - [X] Outlook Reply/Reply All/Forward windows can be opened by explicit click.
   - Code verified + manual confirmed: 可以正确跳转到 Outlook 对应页面。
-- [~] Draft body is prefilled in Outlook compose window.
-  - Manual confirmed: 能预填并跳转，但存在问题（待用户反馈具体 issue）。
+- [!] Draft body is prefilled in Outlook compose window.
+  - Manual failed: compose windows open, but non-empty draft body is garbled for Chinese and English text. Empty draft buttons currently open compose windows but should be gated. See `C10` and `05-post-c10-fix-optimization-plan.md`.
 - [X] Easy Mail never auto-sends.
   - Verified: grep for `.Send` in compose VBS returns nothing. grep for `auto.?send`/`autoSend` in src/ returns nothing. VBS calls `Display` only.
 - [X] Next Actions does not conflict with `followUp` category.
   - Verified: `next-actions.ts` does not reference `followUp`. `followUp` remains in `VALID_CATEGORIES`, sidebar queue, dashboard labels. Next Actions uses separate `NextActionItem` type and `next-actions.json` store.
-- [X] All new behavior has tests or documented manual validation.
-  - Verified: 258 tests pass. Thread Spotlight (workbench + dashboard), Draft Assist (editable box, polish, refine, copy), Outlook compose (message handler dispatch + mode validation), Next Actions (extract, dedupe, merge, status, normalize, message handler). C10 Outlook COM testing documented as blocked.
+- [!] All new behavior has tests or documented manual validation.
+  - Automated coverage exists for Thread Spotlight, Draft Assist, Outlook compose dispatch, and Next Actions, but C10 manual Outlook validation failed. The failed acceptance and follow-up remediation are documented in `05-post-c10-fix-optimization-plan.md`.
 
 ---
 
@@ -1927,6 +1934,27 @@ Pre-merge challenge question:
 
 Append updates here when a coding agent starts or completes meaningful work.
 
+### Snapshot - 2026-07-02 - Post-C10 user validation
+
+Status:
+
+- Milestones A, B, and D are implemented and test-covered at the plan level.
+- Milestone C implementation exists, but C10 failed manual validation because non-empty Outlook compose draft bodies are mojibake.
+- Cross-milestone acceptance is not complete until the C10 prefill issue is fixed and retested.
+
+Current recommendation:
+
+1. Do not mark this plan complete.
+2. Use `docs/v2-design/competitor-analysis/05-post-c10-fix-optimization-plan.md` as the next source of truth for remediation.
+3. Start with `P0.1 Fix Outlook compose draft encoding and empty draft guard`.
+
+Known caution:
+
+- The likely encoding mismatch is `extension.ts` writing UTF-8 and `compose-outlook-mail.vbs` reading the file as UTF-16/Unicode.
+- User also reported UI, security confirmation, classification, body rendering, timeline, icon, multi-account, and redaction issues. They are captured in the follow-up plan, not in this original MVP plan.
+
+---
+
 ### Snapshot - 2026-07-02 - D10 Next Actions MVP
 
 Status:
@@ -2060,6 +2088,40 @@ Known caution:
 ---
 
 ## 9. Handover Log
+
+#### Handover - 2026-07-02 - Codex (Post-C10 planning)
+
+Status: Done — C10 and cross-milestone checklist updated from user validation; follow-up plan created
+
+Changed:
+- Updated C10 from blocked/manual-unverified to failed manual validation.
+- Updated Cross-Milestone Acceptance Checklist so draft prefill and overall validation are blocked by the failed C10 manual test.
+- Added Post-C10 snapshot.
+- Added `docs/v2-design/competitor-analysis/05-post-c10-fix-optimization-plan.md` for the 15 reported issues and multi-agent follow-up execution.
+
+Validated:
+- Re-read C10, Cross-Milestone Acceptance Checklist, Current Snapshot Updates, and latest Handover Log.
+- Checked repo dirty state before edits: `agents.md` was already modified and unrelated.
+- Inspected current code paths enough to identify likely compose encoding mismatch and high-risk remediation areas.
+
+Known issues:
+- No source code has been changed in this checkpoint.
+- No automated tests were run because this is a planning/documentation update.
+- `agents.md` remains an unrelated pre-existing dirty file and was not touched.
+
+Last safe stopping point:
+- Documentation now reflects that C10 is failed, not merely blocked.
+- Start the remediation from `05-post-c10-fix-optimization-plan.md`.
+
+Uncommitted changes / dirty files:
+- `docs/v2-design/competitor-analysis/04-execution-plan-thread-spotlight-draft-assist-next-actions.md`
+- `docs/v2-design/competitor-analysis/05-post-c10-fix-optimization-plan.md`
+- `agents.md` is unrelated pre-existing dirty state.
+
+Next recommended step:
+- Claim `P0.1 Fix Outlook compose draft encoding and empty draft guard` in `05-post-c10-fix-optimization-plan.md`, then add tests before implementation.
+
+---
 
 #### Handover - 2026-07-02 - Claude Opus (D1-D10)
 
