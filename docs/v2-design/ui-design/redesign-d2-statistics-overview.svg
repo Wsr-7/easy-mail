@@ -1,9 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="980" height="220" viewBox="0 0 980 220">
-<rect width="980" height="220" fill="#15171B"/>
-<text x="24" y="34" fill="#8D96A0" font-family="Arial" font-size="12" font-weight="700">D2 / STATISTICS AS LANE COUNTERS</text>
-<rect x="24" y="52" width="932" height="140" rx="8" fill="#1F2329" stroke="#343A43"/>
-<rect x="48" y="80" width="196" height="82" rx="6" fill="#24282F" stroke="#4A3B36"/><text x="68" y="106" fill="#F0D4CA" font-family="Arial" font-size="13" font-weight="700">Attention Required</text><text x="68" y="140" fill="#F0D4CA" font-family="Arial" font-size="26" font-weight="700">6</text>
-<rect x="262" y="80" width="196" height="82" rx="6" fill="#24282F" stroke="#3B4550"/><text x="282" y="106" fill="#D8DDE4" font-family="Arial" font-size="13" font-weight="700">Ready to Analyze</text><text x="282" y="140" fill="#D8DDE4" font-family="Arial" font-size="26" font-weight="700">18</text>
-<rect x="476" y="80" width="196" height="82" rx="6" fill="#24282F" stroke="#3B4550"/><text x="496" y="106" fill="#D8DDE4" font-family="Arial" font-size="13" font-weight="700">Active Threads</text><text x="496" y="140" fill="#D8DDE4" font-family="Arial" font-size="26" font-weight="700">9</text>
-<rect x="690" y="80" width="222" height="82" rx="6" fill="#1D2228" stroke="#303740"/><text x="710" y="112" fill="#8D96A0" font-family="Arial" font-size="12">Pulled 42 / Analysed 24</text><text x="710" y="140" fill="#8D96A0" font-family="Arial" font-size="12">Notice 11 / Waiting 3</text>
-</svg>

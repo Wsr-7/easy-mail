@@ -45,7 +45,7 @@
     "README.md",
     "user guide.md",
     "setup.md",
-    "agents.md",
+    "AGENTS.md",
     "default-config.json"
   ],
   "contributes": {

@@ -1695,10 +1695,10 @@ Do not consider the overall plan complete until these are true:
   - Verified: grep for "stylePreset", "style.preset", "toneSelector" returns nothing.
 - [X] No shortcut buttons are added.
   - Verified: grep for "shortcutButton", "shortcut.button" returns nothing. Only Polish/Refine/Copy/Compose buttons exist.
-- [!] Outlook Reply/Reply All/Forward windows can be opened by explicit click.
-  - Code verified: `composeMail` buttons exist with `data-mode="reply|replyAll|forward"`. VBS script created. **Manual Outlook testing required (C10).**
-- [!] Draft body is prefilled in Outlook compose window.
-  - Code verified: `composeOutlookMail` writes draft to temp file, passes `--body-file` arg. VBS reads and prepends via `TextToHtml` + `HTMLBody`. **Manual Outlook testing required (C10).**
+- [X] Outlook Reply/Reply All/Forward windows can be opened by explicit click.
+  - Code verified + manual confirmed: 可以正确跳转到 Outlook 对应页面。
+- [~] Draft body is prefilled in Outlook compose window.
+  - Manual confirmed: 能预填并跳转，但存在问题（待用户反馈具体 issue）。
 - [X] Easy Mail never auto-sends.
   - Verified: grep for `.Send` in compose VBS returns nothing. grep for `auto.?send`/`autoSend` in src/ returns nothing. VBS calls `Display` only.
 - [X] Next Actions does not conflict with `followUp` category.
